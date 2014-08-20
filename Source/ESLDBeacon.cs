@@ -28,11 +28,27 @@ namespace ESLDJump
         public bool activated = false;
 
         [KSPField(isPersistant = true, guiActive = false)]
+        public double fuelOnBoard = 0;
+
+        [KSPField(isPersistant = true, guiActive = false)]
         public string beaconModel;
 
         // Display beacon operational floor in right click menu.
         [KSPField(guiName = "Lowest Altitude", isPersistant = false, guiActive = true, guiUnits="km")]
         public double opFloor;
+
+        public override void OnUpdate()
+        {
+            ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
+            MAG.Events["Toggle"].guiActive = false;
+            if (activated && MAG.Progress == 0)
+            {
+                MAG.Toggle();
+            } else if (!activated && MAG.Progress == 1)
+            {
+                MAG.Toggle();
+            }
+        }
 
         // Startup sequence for beacon.
         [KSPEvent(name="BeaconInitialize", active = true, guiActive = true, guiName = "Initialize Beacon")]
@@ -54,7 +70,9 @@ namespace ESLDJump
                 BeaconShutdown();
             } else
             {
-                print("Activating beacon!");
+                ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
+                print("Activating beacon!  Toggling MAG from " + MAG.status + "-" + MAG.Progress);
+                MAG.Toggle();
                 activated = true;
                 part.force_activate();
                 Events["BeaconInitialize"].active = false;
@@ -78,11 +96,23 @@ namespace ESLDJump
                 ScreenMessages.PostScreenMessage("Warning: Too close to " + thevar + vessel.mainBody.name + ".  Beacon has been shut down for safety.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 BeaconShutdown();
             }
+            double vfuel = 0;
+            foreach (Part vpart in vessel.Parts)
+            {
+                foreach (PartResource vpr in vpart.Resources)
+                {
+                    if (vpr.resourceName == "Karborundum") vfuel += vpr.amount;
+                }
+            }
+            fuelOnBoard = vfuel;
         }
 
         [KSPEvent(name = "BeaconShutdown", active = false, guiActive = true, guiName = "Shutdown")]
         public void BeaconShutdown()
         {
+            ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
+            print("Activating beacon!  Toggling MAG from " + MAG.status + "-" + MAG.Progress);
+            MAG.Toggle();
             beaconStatus = "Offline.";
             part.deactivate();
             activated = false;
@@ -125,15 +155,15 @@ namespace ESLDJump
                 case "LB10":
                     double distpenalty = 0;
                     if (tripdist > 1000000000) distpenalty = 2;
-                    return (Math.Pow(tonnage, 1 + (.001 * tonnage) + distpenalty) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E6)))) / yardstick);
+                    return ((Math.Pow(tonnage, 1 + (.001 * tonnage) + distpenalty) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E6)))) / yardstick)/tonnage*10000)*tonnage/10000;
                 case "LB15":
-                    return 700 + (Math.Pow(tonnage, 1 + (.0002 * Math.Pow(tonnage, 2))) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E10)))) / yardstick);
+                    return (700 + (Math.Pow(tonnage, 1 + (.0002 * Math.Pow(tonnage, 2))) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E10)))) / yardstick)/tonnage*10000)*tonnage/10000;
                 case "LB100":
-                    return 500 + (Math.Pow(tonnage, 1 + (.00025 * tonnage)) / 20) * ((Math.Sqrt(Math.Sqrt(Math.Sqrt(tripdist * 25000)))) / Math.Sqrt(yardstick));
+                    return (500 + (Math.Pow(tonnage, 1 + (.00025 * tonnage)) / 20) * ((Math.Sqrt(Math.Sqrt(Math.Sqrt(tripdist * 25000)))) / Math.Sqrt(yardstick))/tonnage*10000)*tonnage/10000;
                 case "IB1":
-                    return ((Math.Pow(tonnage, 1 + (tonnage / 6000)) * 0.9) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist + 2E11))) / yardstick);
+                    return ((((Math.Pow(tonnage, 1 + (tonnage / 6000)) * 0.9) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist + 2E11))) / yardstick)/tonnage*10000)*tonnage/10000);
                 default:
-                    return 0;
+                    return 1000;
             }
         }
 
@@ -160,38 +190,6 @@ namespace ESLDJump
                     break;
             }
             return Math.Round(Math.Log(tripdist) / Math.Log(driftmodifier) * 10)*100;
-        }
-
-        // Get fuel on a given vessel.  Not really working right now for unloaded vessels.
-        private double getFuelOnVessel(Vessel craft)
-        {
-            double cfuel = 0;
-            if (craft.loaded == true)
-            {
-                foreach (Part cpart in craft.Parts)
-                {
-                    foreach (PartResource cpr in cpart.Resources)
-                    {
-                        if (cpr.resourceName == "Karborundum") cfuel += cpr.amount;
-                    }
-                }
-                return cfuel;
-            }
-            else
-            {
-                return 0;
-/*              print("marker c");
-                foreach (ProtoPartSnapshot cpart in craft.protoVessel.protoPartSnapshots)
-                {
-                    foreach (ProtoPartResourceSnapshot cpr in cpart.resources)
-                    {
-                        if (cpr.resourceRef.name == "Karborundum") cfuel += cpr.resourceRef.amount;
-                    }
-                }
-                return cfuel;
-                */
-            }
-            
         }
 
         // Finds if the path between beacons passes too close to a planet or is within its gravity well.
@@ -327,7 +325,7 @@ namespace ESLDJump
             {
                 double tonnage = vessel.GetTotalMass();
                 Vessel nbparent = nearBeacon.vessel;
-                double nbfuel = getFuelOnVessel(nbparent);
+                double nbfuel = nearBeacon.fuelOnBoard;
                 double driftpenalty = Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5));
                 if (driftpenalty > 0) GUILayout.Label("+" + driftpenalty + "% due to Drift.");
                 foreach (KeyValuePair<Vessel, string> ftarg in farTargets)
@@ -417,9 +415,10 @@ namespace ESLDJump
             GUILayout.Label("Destination: " + farBeacon.mainBody.name + " at " + Math.Round(farBeacon.altitude / 1000) + "km.");
             precision = getTripSpread(tripdist, nbModel);
             GUILayout.Label("Transfer will emerge within " + precision +"m of destination beacon.");
-            double checkfuel = getFuelOnVessel(farBeacon);
-            GUILayout.Label("Destination beacon has " + checkfuel + " Karborundum."); // Always zero since the remote checking is broken.
             double retTripCost = 0;
+            double checkfuel = 0;
+            bool fuelcheck = false;
+            print("Marker 1");
             foreach (ProtoPartSnapshot ppart in farBeacon.protoVessel.protoPartSnapshots)
             {
                 foreach (ProtoPartModuleSnapshot pmod in ppart.modules)
@@ -427,10 +426,15 @@ namespace ESLDJump
                     if (pmod.moduleName == "ESLDBeacon" && pmod.moduleValues.GetValue("beaconStatus") == "Active.")
                     {
                         string pmodel = pmod.moduleValues.GetValue("beaconModel");
+                        fuelcheck = double.TryParse(pmod.moduleValues.GetValue("fuelOnBoard"), out checkfuel);
                         if (retTripCost < getTripBaseCost(tripdist, tonnage, pmodel)) retTripCost = getTripBaseCost(tripdist, tonnage, pmodel);
                     }
                 }
             }
+            print("Marker 2");
+            string fuelmessage = "Destination beacon's fuel could not be checked.";
+            if (fuelcheck) fuelmessage = "Destination beacon has " + checkfuel + " Karborundum.";
+            GUILayout.Label(fuelmessage); 
             retTripCost = Math.Round(retTripCost * 100)/100;
             if (retTripCost <= checkfuel)
             {
@@ -478,7 +482,7 @@ namespace ESLDJump
                 if (fuelBalance == 0 && finalPathCheck) // Fuel is paid for and path is clear.
                 {
                     // Buckle up!
-                    Vector3d spread = UnityEngine.Random.onUnitSphere + (UnityEngine.Random.insideUnitSphere * 0.2f) * (float)precision;
+                    Vector3d spread = UnityEngine.Random.onUnitSphere + UnityEngine.Random.insideUnitSphere * (float)precision;
                     vessel.Landed = false;
                     vessel.Splashed = false;
                     vessel.landedAt = string.Empty;
