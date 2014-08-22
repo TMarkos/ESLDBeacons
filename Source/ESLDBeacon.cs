@@ -9,12 +9,30 @@ namespace ESLDCore
 {
     public class ESLDBeacon : PartModule
     {
-        public double gLimit = 1;
         public object targetbody;
 
-        // Given a target body and an acceptable gravity strength, get minimum ASL where beacon can function in km.
-        public double findAcceptableAltitude(CelestialBody targetbody, double gLimit)
+        // Given a target body, get minimum ASL where beacon can function in km.
+        public double findAcceptableAltitude(CelestialBody targetbody)
         {
+            switch (beaconModel)
+            {
+                case "LB10":
+                    gLimit = 1.0;
+                    break;
+                case "LB15":
+                    gLimit = 0.5;
+                    break;
+                case "LB100":
+                    gLimit = 0.1;
+                    break;
+                case "IB1":
+                    gLimit = 0.1;
+                    break;
+                default:
+                    gLimit = 0.1;
+                    break;
+            }
+            if (hasSCU) gLimit *= 1.25;
             double limbo = Math.Round((Math.Sqrt((6.673E-11 * targetbody.Mass) / gLimit) - targetbody.Radius));
             if (limbo < targetbody.Radius * 0.25) limbo = targetbody.Radius * 0.25;
             return limbo / 1000;
@@ -23,6 +41,9 @@ namespace ESLDCore
         // Display beacon status in right click menu.
         [KSPField(guiName = "Beacon Status", isPersistant = true, guiActive = true)]
         public string beaconStatus;
+
+        [KSPField(isPersistant=true, guiActive=false)]
+        public double gLimit = 2;
 
         [KSPField(isPersistant = true, guiActive = false)]
         public bool activated = false;
@@ -47,6 +68,7 @@ namespace ESLDCore
 
         public override void OnUpdate()
         {
+            opFloor = findAcceptableAltitude(vessel.mainBody); // Keep updating tooltip display.
             ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
             MAG.Events["Toggle"].guiActive = false;
             if (activated && MAG.Progress == 0)
@@ -96,6 +118,7 @@ namespace ESLDCore
         [KSPEvent(name="BeaconInitialize", active = true, guiActive = true, guiName = "Initialize Beacon")]
         public void BeaconInitialize()
         {
+            checkOwnTechBoxes();
             if (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude > gLimit) // Check our G forces.
             {
                 print("Too deep in gravity well to activate!");
@@ -120,13 +143,11 @@ namespace ESLDCore
                 Events["BeaconInitialize"].active = false;
                 Events["BeaconShutdown"].active = true;
                 beaconStatus = "Active.";
-                checkOwnTechBoxes();
             }
         }
 
         public override void OnFixedUpdate()
         {
-            opFloor = findAcceptableAltitude(vessel.mainBody, gLimit); // Keep updating tooltip display.
             if (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude > gLimit)
             {
                 ScreenMessages.PostScreenMessage("Warning: Too deep in gravity well.  Beacon has been shut down for safety.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
