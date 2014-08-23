@@ -24,3 +24,6 @@ This project is still in the early stages.  I'll note that this is my very first
 I had used Photoshop before, so I have that going for me, which is nice.
 
 Credit goes to ParameciumKid for inspiring me to work on my own version of a jumpdrive mod with his own excellent mod, and for being nice when I asked for pointers.  
+
+Part.cfg changes powered by sarbian & ialdabaoth's ModuleManager plugin; used with permission:
+http://forum.kerbalspaceprogram.com/threads/55219
