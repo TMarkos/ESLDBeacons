@@ -32,7 +32,7 @@ namespace ESLDCore
                     gLimit = 0.1;
                     break;
             }
-            if (hasSCU) gLimit *= 1.25;
+            if (hasGMU) gLimit *= 1.25;
             double limbo = Math.Round((Math.Sqrt((6.673E-11 * targetbody.Mass) / gLimit) - targetbody.Radius));
             if (limbo < targetbody.Radius * 0.25) limbo = targetbody.Radius * 0.25;
             return limbo / 1000;
