@@ -17,7 +17,7 @@ The general process to use this network is to place at least two beacons, then a
 Fuel is an important consideration, because it's what keeps the beacon system balanced in career mode.  True to the maxim that you can choose two from the list of fast, cheap and high-quality, the jump fuel that makes the system tick is incredibly costly, to the extent that most transfers the beacon system performs are more expensive than or comparable to traditional rocketry-based solutions.  Time is the ONLY thing you save with beacons, and some players may even plow more into logistics than they would otherwise have cause to do if they feel like maintaining an accessible and fueled beacon network at all times.  
 This project is still in the early stages.  I'll note that this is my very first time:
 * Running a GitHub repository.
-* Writing code in C.
+* Writing code in C#.
 * Modeling in Blender.
 * Modeling in Unity.
 
