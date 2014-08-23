@@ -148,6 +148,7 @@ namespace ESLDCore
 
         public override void OnFixedUpdate()
         {
+            checkOwnTechBoxes();
             if (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude > gLimit)
             {
                 ScreenMessages.PostScreenMessage("Warning: Too deep in gravity well.  Beacon has been shut down for safety.", 5.0f, ScreenMessageStyle.UPPER_CENTER);

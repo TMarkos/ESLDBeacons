@@ -76,7 +76,7 @@ namespace ESLDCore
         // Calculate AMU cost in units of Karborundum given two vessel endpoints and the tonnage of the transferring vessel.
         private double getAMUCost(Vessel near, Vessel far, double tton)
         {
-            Vector3d velDiff = getJumpOffset(near, far);
+            Vector3d velDiff = getJumpOffset(near, far) - far.orbit.vel;
             double comp = velDiff.magnitude;
             return Math.Round(((comp * tton) / (comp + (tton * 25))) * 100) / 100;
         }
@@ -454,21 +454,38 @@ namespace ESLDCore
                     // Buckle up!
                     if (!nearBeacon.hasHCU) // Penalize for HCU not being present/online.
                     {
+                        List<ProtoCrewMember> crewList = new List<ProtoCrewMember>();
+                        List<Part> crewParts = new List<Part>();
                         foreach (Part vpart in vessel.Parts)
                         {
                             foreach (ProtoCrewMember crew in vpart.protoModuleCrew)
                             {
-                                vpart.RemoveCrewmember(crew);
-                                ScreenMessages.PostScreenMessage(crew.name + " was killed in transit!", 5.0f, ScreenMessageStyle.UPPER_CENTER);
-                                crew.Die();
+                                crewParts.Add(vpart);
+                                crewList.Add(crew);
                             }
                         }
+                        for (int i = crewList.Count - 1; i >= 0; i--)
+                        {
+                            if (i >= crewList.Count)
+                            {
+                                if (crewList.Count == 0) break;
+                                i = crewList.Count - 1;
+                            }
+                            ProtoCrewMember tempCrew = crewList[i];
+                            crewList.RemoveAt(i);
+                            ScreenMessages.PostScreenMessage(tempCrew.name + " was killed in transit!", 5.0f, ScreenMessageStyle.UPPER_CENTER);
+                            crewParts[i].RemoveCrewmember(tempCrew);
+                            crewParts.RemoveAt(i);
+                            tempCrew.Die();
+                        }
+                        print("Marker 2");
                         Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                         List<Part> HCUList = new List<Part>();
                         foreach (KeyValuePair<Part, string> HCUPart in HCUParts)
                         {
                             HCUList.Add(HCUPart.Key);
                         }
+                        print("Marker 3");
                         HCUParts.Clear();
                         for (int i = HCUList.Count - 1; i >= 0; i--)
                         {
@@ -477,6 +494,7 @@ namespace ESLDCore
                                 if (HCUList.Count == 0) break;
                                 i = HCUList.Count - 1;
                             }
+                            print("Marker 4");
                             Part tempPart = HCUList[i];
                             HCUList.RemoveAt(i);
                             tempPart.explosionPotential = 1;
@@ -484,7 +502,7 @@ namespace ESLDCore
                             tempPart.Die();
                         }
                     }
-                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon) + farBeacon.orbit.vel;
+                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon);
                     if (nearBeacon.hasAMU) transferVelOffset = farBeacon.orbit.vel;
                     Vector3d spread = ((UnityEngine.Random.onUnitSphere + UnityEngine.Random.insideUnitSphere) / 2) * (float)precision;
                     vessel.Landed = false;
