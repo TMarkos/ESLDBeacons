@@ -87,6 +87,11 @@ namespace ESLDCore
             hasGMU = false;
             hasSCU = false;
             techBoxInventory = 0;
+            if (beaconModel == "IB1")
+            {
+                hasHCU = true;
+                techBoxInventory += 2;
+            }
             foreach (ESLDTechbox techbox in vessel.FindPartModulesImplementing<ESLDTechbox>())
             {
                 if (techbox.activated)

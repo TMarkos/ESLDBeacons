@@ -13,6 +13,7 @@ namespace ESLDCore
         protected Rect ConfirmWindow;
         public ESLDBeacon nearBeacon = null;
         public Vessel farBeacon = null;
+        public string farBeaconModel = "";
         public Dictionary<Vessel, string> farTargets = new Dictionary<Vessel, string>();
         public bool isJumping = false;
         public double precision;
@@ -101,10 +102,10 @@ namespace ESLDCore
         }
 
         // Calculate how far away from a beacon the ship will arrive.
-        private double getTripSpread(double tripdist, string nbModel)
+        private double getTripSpread(double tripdist, string fbmodel)
         {
             double driftmodifier = 1;
-            switch (nbModel)
+            switch (fbmodel)
             {
                 case "LB10":
                     driftmodifier = 10;
@@ -163,6 +164,18 @@ namespace ESLDCore
         {
             hasNearBeacon = "Not Present";
             Fields["hasNearBeacon"].guiActive = true;
+            foreach (ESLDBeacon selfBeacon in vessel.FindPartModulesImplementing<ESLDBeacon>())
+            {
+                if (selfBeacon.beaconModel == "IB1" && selfBeacon.activated == true)
+                {
+                    nearBeaconDistance = 0;
+                    nearBeaconRelVel = 0;
+                    Fields["nearBeaconDistance"].guiActive = false;
+                    Fields["nearBeaconRelVel"].guiActive = false;
+                    hasNearBeacon = "Onboard";
+                    return selfBeacon;
+                }
+            }
             foreach (Vessel craft in FlightGlobals.Vessels)
             {
                 if (craft.loaded == false) continue;                // Eliminate far away craft.
@@ -171,6 +184,7 @@ namespace ESLDCore
                 if (craft.FindPartModulesImplementing<ESLDBeacon>().Count == 0) continue; // Has beacon?
                 ESLDBeacon craftbeacon = craft.FindPartModulesImplementing<ESLDBeacon>().First(); // Should later implement some way of recognizing multiple beacons.
                 if (craftbeacon.activated == false) { continue; }   // Beacon active?
+                if (craftbeacon.beaconModel == "IB1") { continue; } // Jumpdrives can't do remote transfers.
                 Fields["nearBeaconDistance"].guiActive = true;         // How far away is it?
                 nearBeaconDistance = Math.Round(Vector3d.Distance(vessel.GetWorldPos3D(), craft.GetWorldPos3D()));
                 Fields["nearBeaconRelVel"].guiActive = true;
@@ -180,6 +194,7 @@ namespace ESLDCore
             }
             Fields["nearBeaconDistance"].guiActive = false;
             Fields["nearBeaconRelVel"].guiActive = false;
+            nearBeacon = null;
             return null;
         }
 
@@ -214,9 +229,9 @@ namespace ESLDCore
                 if (startState != hasNearBeacon)
                 {
                     HailerGUIClose();
-                    Events["HailerGUIClose"].active = false;
-                    Events["HailerGUIOpen"].active = false;
                 }
+                Events["HailerGUIClose"].active = false;
+                Events["HailerGUIOpen"].active = false;
             }
             else
             {
@@ -250,7 +265,7 @@ namespace ESLDCore
             buttonNeutral.hover.textColor = buttonNoFuel.active.textColor = Color.white;
 
             GUILayout.BeginVertical(HighLogic.Skin.scrollView);
-            if (farTargets.Count() < 1)
+            if (farTargets.Count() < 1 || nearBeacon == null)
             {
                 GUILayout.Label("No active beacons found.");
             }
@@ -300,6 +315,7 @@ namespace ESLDCore
                         if (fuelstate == buttonHasFuel)
                         {
                             farBeacon = ftarg.Key;
+                            farBeaconModel = ftarg.Value;
                             drawConfirm();
                             RenderingManager.AddToPostDrawQueue(4, new Callback(drawConfirm));
                             HailerGUIClose();
@@ -380,7 +396,7 @@ namespace ESLDCore
             }
             GUILayout.Label("Total Cost: " + tripcost + " Karborundum.");
             GUILayout.Label("Destination: " + farBeacon.mainBody.name + " at " + Math.Round(farBeacon.altitude / 1000) + "km.");
-            precision = getTripSpread(tripdist, nbModel);
+            precision = getTripSpread(tripdist, farBeaconModel);
             GUILayout.Label("Transfer will emerge within " + precision + "m of destination beacon.");
             if (!nearBeacon.hasAMU)
             {
@@ -478,14 +494,12 @@ namespace ESLDCore
                             crewParts.RemoveAt(i);
                             tempCrew.Die();
                         }
-                        print("Marker 2");
                         Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                         List<Part> HCUList = new List<Part>();
                         foreach (KeyValuePair<Part, string> HCUPart in HCUParts)
                         {
                             HCUList.Add(HCUPart.Key);
                         }
-                        print("Marker 3");
                         HCUParts.Clear();
                         for (int i = HCUList.Count - 1; i >= 0; i--)
                         {
@@ -494,7 +508,6 @@ namespace ESLDCore
                                 if (HCUList.Count == 0) break;
                                 i = HCUList.Count - 1;
                             }
-                            print("Marker 4");
                             Part tempPart = HCUList[i];
                             HCUList.RemoveAt(i);
                             tempPart.explosionPotential = 1;
@@ -582,6 +595,8 @@ namespace ESLDCore
             RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
             Events["HailerDeactivate"].active = false;
             Events["HailerActivate"].active = true;
+            Events["HailerGUIOpen"].active = false;
+            Events["HailerGUIClose"].active = false;
             Fields["hasNearBeacon"].guiActive = false;
             Fields["nearBeaconDistance"].guiActive = false;
             Fields["nearBeaconRelVel"].guiActive = false;
