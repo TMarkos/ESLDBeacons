@@ -15,13 +15,16 @@ namespace ESLDCore
         public Vessel farBeacon = null;
         public string farBeaconModel = "";
         public Dictionary<Vessel, string> farTargets = new Dictionary<Vessel, string>();
+        public Dictionary<ESLDBeacon, string> nearBeacons = new Dictionary<ESLDBeacon, string>();
         public bool isJumping = false;
         public double precision;
-        public OrbitDriver hailerOrbit;
         public OrbitDriver oPredictDriver = null;
         public OrbitRenderer oPredict = null;
         public double lastRemDist;
         public bool wasInMapView;
+        public bool nbWasUserSelected = false;
+        public int currentBeaconIndex;
+        public string currentBeaconDesc;
         public double HCUCost = 0;
 
         // GUI Open?
@@ -157,7 +160,7 @@ namespace ESLDCore
             foreach (MapObject mobj in MapView.MapCamera.targets)
             {
                 if (mobj.vessel == null) continue;
-                if (mobj.vessel.GetInstanceID() == vessel.GetInstanceID())
+                if (mobj.vessel.GetInstanceID() == FlightGlobals.ActiveVessel.GetInstanceID())
                 {
                     MapView.MapCamera.SetTarget(mobj);
                 }
@@ -186,12 +189,12 @@ namespace ESLDCore
                     foreach (string checkr in highEnergyResources)
                     if (vres.resourceName.ToLower().Contains(checkr) && vres.amount > 0)
                     {
-                        HCUCost += (vres.info.density * vres.amount / 5);
+                        HCUCost += (vres.info.density * vres.amount / 1.13);
                         HCUParts.Add(vpart, vres.resourceName);
                     }
                 }
             }
-            HCUCost += craft.GetCrewCount() * 0.9 / 5;
+            HCUCost += craft.GetCrewCount() * 0.9 / 1.13;
             HCUCost = Math.Round(HCUCost * 100) / 100;
             return HCUParts;
         }
@@ -258,11 +261,14 @@ namespace ESLDCore
         // Find loaded beacons.  Only in physics distance, since otherwise they're too far out.
         private ESLDBeacon ScanForNearBeacons()
         {
-            hasNearBeacon = "Not Present";
+            nearBeacons.Clear();
             Fields["hasNearBeacon"].guiActive = true;
+            ESLDBeacon nearBeaconCandidate = null;
+            int candidateIndex = 0;
+            string candidateDesc = "";
             foreach (ESLDBeacon selfBeacon in vessel.FindPartModulesImplementing<ESLDBeacon>())
             {
-                if (selfBeacon.beaconModel == "IB1" && selfBeacon.activated == true)
+                if (selfBeacon.beaconModel == "IB1" && selfBeacon.activated)
                 {
                     nearBeaconDistance = 0;
                     nearBeaconRelVel = 0;
@@ -272,22 +278,50 @@ namespace ESLDCore
                     return selfBeacon;
                 }
             }
+            double closest = 3000;
             foreach (Vessel craft in FlightGlobals.Vessels)
             {
                 if (craft.loaded == false) continue;                // Eliminate far away craft.
                 if (craft == vessel) continue;                      // Eliminate current craft.
                 if (craft == FlightGlobals.ActiveVessel) continue;
                 if (craft.FindPartModulesImplementing<ESLDBeacon>().Count == 0) continue; // Has beacon?
-                ESLDBeacon craftbeacon = craft.FindPartModulesImplementing<ESLDBeacon>().First(); // Should later implement some way of recognizing multiple beacons.
-                if (craftbeacon.activated == false) { continue; }   // Beacon active?
-                if (craftbeacon.beaconModel == "IB1") { continue; } // Jumpdrives can't do remote transfers.
-                Fields["nearBeaconDistance"].guiActive = true;         // How far away is it?
+                foreach (ESLDBeacon craftbeacon in craft.FindPartModulesImplementing<ESLDBeacon>())
+                {
+                    if (craftbeacon.activated == false) { continue; }   // Beacon active?
+                    if (craftbeacon.beaconModel == "IB1") { continue; } // Jumpdrives can't do remote transfers.
+                    string bIdentifier = craftbeacon.beaconModel + " (" + craft.vesselName + ")";
+                    nearBeacons.Add(craftbeacon, bIdentifier);
+                    int nbIndex = nearBeacons.Count - 1;
+                    nearBeaconDistance = Math.Round(Vector3d.Distance(vessel.GetWorldPos3D(), craft.GetWorldPos3D()));
+                    if (closest > nearBeaconDistance)
+                    {
+                        nearBeaconCandidate = craftbeacon;
+                        candidateIndex = nbIndex;
+                        candidateDesc = bIdentifier;
+                        closest = nearBeaconDistance;
+                    }
+                }
+            }
+            if (nearBeacon != null && nearBeacon.vessel.loaded && nbWasUserSelected) // If we've already got one, just update the display.
+            {
+                nearBeaconDistance = Math.Round(Vector3d.Distance(vessel.GetWorldPos3D(), nearBeacon.vessel.GetWorldPos3D()));
+                nearBeaconRelVel = Math.Round(Vector3d.Magnitude(vessel.obt_velocity - nearBeacon.vessel.obt_velocity) * 10) / 10;
+                return nearBeacon;
+            }
+            if (nearBeacons.Count > 0) // If we hadn't selected one previously return the closest one.
+            {
+                nbWasUserSelected = false;
+                Vessel craft = nearBeaconCandidate.vessel;
+                Fields["nearBeaconDistance"].guiActive = true;
                 nearBeaconDistance = Math.Round(Vector3d.Distance(vessel.GetWorldPos3D(), craft.GetWorldPos3D()));
                 Fields["nearBeaconRelVel"].guiActive = true;
                 nearBeaconRelVel = Math.Round(Vector3d.Magnitude(vessel.obt_velocity - craft.obt_velocity) * 10) / 10;
                 hasNearBeacon = "Present";
-                return craftbeacon;
+                currentBeaconIndex = candidateIndex;
+                currentBeaconDesc = candidateDesc;
+                return nearBeaconCandidate;
             }
+            hasNearBeacon = "Not Present";
             Fields["nearBeaconDistance"].guiActive = false;
             Fields["nearBeaconRelVel"].guiActive = false;
             nearBeacon = null;
@@ -340,6 +374,7 @@ namespace ESLDCore
         // Screen 1 of beacon interface, displays beacons and where they go along with some fuel calculations. 
         private void BeaconInterface(int GuiId)
         {
+            if (!vessel.isActiveVessel) HailerGUIClose();
             GUIStyle buttonHasFuel = new GUIStyle(GUI.skin.button);
             buttonHasFuel.padding = new RectOffset(8, 8, 8, 8);
             buttonHasFuel.normal.textColor = buttonHasFuel.focused.textColor = Color.green;
@@ -389,8 +424,9 @@ namespace ESLDCore
                     if (tripcost == 0) continue;
                     tripcost += tripcost * (driftpenalty * .01);
                     if (nearBeacon.hasAMU) tripcost += getAMUCost(vessel, ftarg.Key, tonnage, nearBeacon.beaconModel);
-                    double adjHCUCost = HCUCost - (Math.Round(tripcost * 0.02 * 100) / 100);
-                    if (nearBeacon.hasHCU) tripcost += adjHCUCost; // Exempt spent fuel.
+                    double adjHCUCost = HCUCost;
+                    if (nearBeacon.beaconModel == "IB1") adjHCUCost = Math.Round((HCUCost - (tripcost * 0.02)) * 100) / 100;
+                    if (nearBeacon.hasHCU) tripcost += adjHCUCost;
                     tripcost = Math.Round(tripcost * 100) / 100;
                     string targetSOI = ftarg.Key.mainBody.name;
                     double targetAlt = Math.Round(ftarg.Key.altitude / 1000);
@@ -421,6 +457,7 @@ namespace ESLDCore
                         }
                         else
                         {
+                            print("Current beacon has a g limit of " + nearBeacon.gLimit);
                             string messageToPost = "Cannot Warp: Origin beacon has " + nbfuel + " of " + tripcost + " Karborundum required to warp.";
                             string thevar = "";
                             if (blockRock == "Mun" || blockRock == "Sun") thevar = "the ";
@@ -429,6 +466,20 @@ namespace ESLDCore
                             ScreenMessages.PostScreenMessage(messageToPost, 5.0f, ScreenMessageStyle.UPPER_CENTER);
                         }
                     }
+                }
+            }
+            if(nearBeacons.Count > 1)
+            {
+                GUILayout.Label("Current Beacon: " + currentBeaconDesc);
+                if (currentBeaconIndex >= nearBeacons.Count) currentBeaconIndex = nearBeacons.Count - 1;
+                int nextIndex = currentBeaconIndex + 1;
+                if (nextIndex >= nearBeacons.Count) nextIndex = 0;
+                if (GUILayout.Button("Next Beacon (" + (currentBeaconIndex + 1) + " of " + nearBeacons.Count + ")", buttonNeutral))
+                {
+                    nbWasUserSelected = true;
+                    nearBeacon = nearBeacons.ElementAt(nextIndex).Key;
+                    currentBeaconDesc = nearBeacons.ElementAt(nextIndex).Value;
+                    currentBeaconIndex = nextIndex;
                 }
             }
             if (GUILayout.Button("Close Beacon Interface", buttonNeutral))
@@ -494,7 +545,8 @@ namespace ESLDCore
             }
             if (nearBeacon.hasHCU)
             {
-                double adjHCUCost = HCUCost - (Math.Round(tripcost * 0.02 * 100) / 100);
+                double adjHCUCost = HCUCost;
+                if (nearBeacon.beaconModel == "IB1") adjHCUCost = Math.Round((HCUCost - (tripcost * 0.02)) * 100) / 100;
                 GUILayout.Label("HCU Shielding adds " + adjHCUCost + " Karborundum.");
                 tripcost += adjHCUCost;
             }
@@ -640,6 +692,11 @@ namespace ESLDCore
                 {
                     ScreenMessages.PostScreenMessage("Jump failed!  Origin beacon did not have enough fuel to execute transfer.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 }
+            }
+            if (!vessel.isActiveVessel)
+            {
+                RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
+                if (oPredict != null) hideExitOrbit(oPredict);
             }
             if (GUILayout.Button("Back", buttonNeutral))
             {
