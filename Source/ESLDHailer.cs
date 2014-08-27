@@ -18,7 +18,11 @@ namespace ESLDCore
         public bool isJumping = false;
         public double precision;
         public OrbitDriver hailerOrbit;
+        public OrbitDriver oPredictDriver = null;
+        public OrbitRenderer oPredict = null;
         public double lastRemDist;
+        public bool wasInMapView;
+        public double HCUCost = 0;
 
         // GUI Open?
         [KSPField(guiName = "GUIOpen", isPersistant = true, guiActive = false)]
@@ -42,20 +46,20 @@ namespace ESLDCore
                 case "LB10":
                     double distpenalty = 0;
                     if (tripdist > 1000000000) distpenalty = 2;
-                    return ((Math.Pow(tonnage, 1 + (.001 * tonnage) + distpenalty) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E6)))) / yardstick) / tonnage * 10000) * tonnage / 10000;
+                    return ((Math.Pow(tonnage, 1 + (.001 * tonnage) + distpenalty) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E6)))) / yardstick) / tonnage * 10000) * tonnage / 2000;
                 case "LB15":
-                    return (700 + (Math.Pow(tonnage, 1 + (.0002 * Math.Pow(tonnage, 2))) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E10)))) / yardstick) / tonnage * 10000) * tonnage / 10000;
+                    return (700 + (Math.Pow(tonnage, 1 + (.0002 * Math.Pow(tonnage, 2))) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist * (tripdist / 5E10)))) / yardstick) / tonnage * 10000) * tonnage / 2000;
                 case "LB100":
-                    return (500 + (Math.Pow(tonnage, 1 + (.00025 * tonnage)) / 20) * ((Math.Sqrt(Math.Sqrt(Math.Sqrt(tripdist * 25000)))) / Math.Sqrt(yardstick)) / tonnage * 10000) * tonnage / 10000;
+                    return (500 + (Math.Pow(tonnage, 1 + (.00025 * tonnage)) / 20) * ((Math.Sqrt(Math.Sqrt(Math.Sqrt(tripdist * 25000)))) / Math.Sqrt(yardstick)) / tonnage * 10000) * tonnage / 2000;
                 case "IB1":
-                    return ((((Math.Pow(tonnage, 1 + (tonnage / 6000)) * 0.9) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist + 2E11))) / yardstick) / tonnage * 10000) * tonnage / 10000);
+                    return ((((Math.Pow(tonnage, 1 + (tonnage / 6000)) * 0.9) / 10) * ((Math.Sqrt(Math.Sqrt(tripdist + 2E11))) / yardstick) / tonnage * 10000) * tonnage / 2000);
                 default:
                     return 1000;
             }
         }
 
         // Calculate Jump Offset
-        private Vector3d getJumpOffset(Vessel near, Vessel far)
+        private Vector3d getJumpOffset(Vessel near, Vessel far, string model)
         {
             Vector3d farRealVelocity = far.orbit.vel;
             CelestialBody farRefbody = far.mainBody;
@@ -64,6 +68,7 @@ namespace ESLDCore
                 farRealVelocity += farRefbody.orbit.vel;
                 farRefbody = farRefbody.referenceBody;
             }
+            if (model == "LB10") farRealVelocity -= far.orbit.vel; // LB10s don't respect destination velocity.
             Vector3d nearRealVelocity = near.orbit.vel;
             CelestialBody nearRefbody = near.mainBody;
             while (nearRefbody.flightGlobalsIndex != 0) // Kerbol
@@ -74,17 +79,104 @@ namespace ESLDCore
             return nearRealVelocity - farRealVelocity;
         }
 
-        // Calculate AMU cost in units of Karborundum given two vessel endpoints and the tonnage of the transferring vessel.
-        private double getAMUCost(Vessel near, Vessel far, double tton)
+        // Mapview Utility
+        private MapObject findVesselBody(Vessel craft)
         {
-            Vector3d velDiff = getJumpOffset(near, far) - far.orbit.vel;
+            int cInst = craft.mainBody.GetInstanceID();
+//          foreach (MapObject mobj in MapView.FindObjectsOfType<MapObject>())
+            foreach (MapObject mobj in MapView.MapCamera.targets)
+            {
+                if (mobj.celestialBody == null) continue;
+                if (mobj.celestialBody.GetInstanceID() == cInst)
+                {
+                    return mobj;
+                }
+            }
+            return null;
+        }
+
+        // Show exit orbital predictions
+        private void showExitOrbit(Vessel near, Vessel far, string model)
+        {
+            // Recenter map, save previous state.
+            wasInMapView = MapView.MapIsEnabled;
+            if (!MapView.MapIsEnabled) MapView.EnterMapView();
+            print("Finding target.");
+            MapObject farTarget = findVesselBody(far);
+            if (farTarget != null) MapView.MapCamera.SetTarget(farTarget);
+
+            // Initialize projection stuff.
+            print("Beginning orbital projection.");
+            Vector3d exitTraj = getJumpOffset(near, far, model);
+            oPredictDriver = new OrbitDriver();
+            oPredictDriver.orbit = new Orbit();
+            oPredictDriver.orbit.referenceBody = far.mainBody;
+            oPredictDriver.referenceBody = far.mainBody;
+            oPredictDriver.upperCamVsSmaRatio = 999999;  // Took forever to figure this out - this sets at what zoom level the orbit appears.  Was causing it not to appear at small bodies.
+            oPredictDriver.lowerCamVsSmaRatio = 0.0001f;
+            oPredictDriver.orbit.UpdateFromStateVectors(far.orbit.pos, exitTraj, far.mainBody, Planetarium.GetUniversalTime());
+            oPredictDriver.orbit.Init();
+            Vector3d p = oPredictDriver.orbit.getRelativePositionAtUT(Planetarium.GetUniversalTime());
+            Vector3d v = oPredictDriver.orbit.getOrbitalVelocityAtUT(Planetarium.GetUniversalTime());
+            oPredictDriver.orbit.h = Vector3d.Cross(p, v);
+            oPredict = MapView.MapCamera.gameObject.AddComponent<OrbitRenderer>();
+            oPredict.upperCamVsSmaRatio = 999999;
+            oPredict.lowerCamVsSmaRatio = 0.0001f;
+            oPredict.celestialBody = far.mainBody;
+            oPredict.driver = oPredictDriver;
+            oPredictDriver.Renderer = oPredict;
+            
+            // Splash some color on it.
+            print("Displaying orbital projection.");
+            oPredict.driver.drawOrbit = true;
+            oPredict.driver.orbitColor = Color.red;
+            oPredict.orbitColor = Color.red;
+            oPredict.drawIcons = OrbitRenderer.DrawIcons.OBJ_PE_AP;
+            oPredict.drawMode = OrbitRenderer.DrawMode.REDRAW_AND_RECALCULATE;
+        }
+
+        // Update said predictions
+        private void updateExitOrbit(Vessel near, Vessel far, string model)
+        {
+            Vector3d exitTraj = getJumpOffset(near, far, model);
+            oPredict.driver.referenceBody = far.mainBody;
+            oPredict.driver.orbit.referenceBody = far.mainBody;
+            oPredict.driver.pos = far.orbit.pos;
+            oPredict.celestialBody = far.mainBody;
+            oPredictDriver.orbit.UpdateFromStateVectors(far.orbit.pos, exitTraj, far.mainBody, Planetarium.GetUniversalTime());
+            //oPredictDriver.orbit.Init();
+        }
+
+        // Back out of orbital predictions.
+        private void hideExitOrbit(OrbitRenderer showOrbit)
+        {
+            showOrbit.drawMode = OrbitRenderer.DrawMode.OFF;
+            showOrbit.driver.drawOrbit = false;
+            showOrbit.drawIcons = OrbitRenderer.DrawIcons.NONE;
+
+            foreach (MapObject mobj in MapView.MapCamera.targets)
+            {
+                if (mobj.vessel == null) continue;
+                if (mobj.vessel.GetInstanceID() == vessel.GetInstanceID())
+                {
+                    MapView.MapCamera.SetTarget(mobj);
+                }
+            }
+            if (MapView.MapIsEnabled && !wasInMapView) MapView.ExitMapView();
+        }
+
+        // Calculate AMU cost in units of Karborundum given two vessel endpoints and the tonnage of the transferring vessel.
+        private double getAMUCost(Vessel near, Vessel far, double tton, string model)
+        {
+            Vector3d velDiff = getJumpOffset(near, far, model) - far.orbit.vel;
             double comp = velDiff.magnitude;
-            return Math.Round(((comp * tton) / (comp + (tton * 25))) * 100) / 100;
+            return Math.Round(((comp * tton) / (comp + (tton * 25))) * 500) / 100;
         }
 
         // Find parts that need a HCU to transfer.
         private Dictionary<Part, string> getHCUParts(Vessel craft)
         {
+            HCUCost = 0;
             Array highEnergyResources = new string[7] { "karborundum", "uranium", "plutonium", "antimatter", "thorium", "nuclear", "exotic" };
             Dictionary<Part, string> HCUParts = new Dictionary<Part, string>();
             foreach (Part vpart in vessel.Parts)
@@ -94,10 +186,13 @@ namespace ESLDCore
                     foreach (string checkr in highEnergyResources)
                     if (vres.resourceName.ToLower().Contains(checkr) && vres.amount > 0)
                     {
+                        HCUCost += (vres.info.density * vres.amount / 5);
                         HCUParts.Add(vpart, vres.resourceName);
                     }
                 }
             }
+            HCUCost += craft.GetCrewCount() * 0.9 / 5;
+            HCUCost = Math.Round(HCUCost * 100) / 100;
             return HCUParts;
         }
 
@@ -155,6 +250,7 @@ namespace ESLDCore
                     return returnPair;
                 }
             }
+            if (FlightGlobals.getGeeForceAtPosition(vDestination.GetWorldPos3D()).magnitude > gLimit) return new KeyValuePair<string, CelestialBody>("Gravity", vDestination.mainBody);
             returnPair = new KeyValuePair<string, CelestialBody>("OK", null);
             return returnPair;
         }
@@ -278,9 +374,9 @@ namespace ESLDCore
                 double nbfuel = nearBeacon.fuelOnBoard;
                 double driftpenalty = Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5));
                 if (driftpenalty > 0) GUILayout.Label("+" + driftpenalty + "% due to Drift.");
+                Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                 if (!nearBeacon.hasHCU)
                 {
-                    Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                     if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no Heisenkerb Compensator.");
                     if (vessel.GetCrewCount() > 0) GUILayout.Label("Transfer will kill crew.");
                     if (HCUParts.Count > 0) GUILayout.Label("Some resources will destabilize.");
@@ -292,7 +388,9 @@ namespace ESLDCore
                     if (nearBeacon.hasSCU && driftpenalty == 0) tripcost *= 0.9;
                     if (tripcost == 0) continue;
                     tripcost += tripcost * (driftpenalty * .01);
-                    if (nearBeacon.hasAMU) tripcost += getAMUCost(vessel, ftarg.Key, tonnage);
+                    if (nearBeacon.hasAMU) tripcost += getAMUCost(vessel, ftarg.Key, tonnage, nearBeacon.beaconModel);
+                    double adjHCUCost = HCUCost - (Math.Round(tripcost * 0.02 * 100) / 100);
+                    if (nearBeacon.hasHCU) tripcost += adjHCUCost; // Exempt spent fuel.
                     tripcost = Math.Round(tripcost * 100) / 100;
                     string targetSOI = ftarg.Key.mainBody.name;
                     double targetAlt = Math.Round(ftarg.Key.altitude / 1000);
@@ -317,6 +415,7 @@ namespace ESLDCore
                             farBeacon = ftarg.Key;
                             farBeaconModel = ftarg.Value;
                             drawConfirm();
+                            if (!nearBeacon.hasAMU) showExitOrbit(vessel, farBeacon, nearBeacon.beaconModel);
                             RenderingManager.AddToPostDrawQueue(4, new Callback(drawConfirm));
                             HailerGUIClose();
                         }
@@ -355,7 +454,6 @@ namespace ESLDCore
             GUIStyle labelNoFuel = new GUIStyle(GUI.skin.label);
             labelNoFuel.normal.textColor = Color.red;
             GUILayout.BeginVertical(HighLogic.Skin.scrollView);
-
             double tripdist = Vector3d.Distance(nearBeacon.vessel.GetWorldPos3D(), farBeacon.GetWorldPos3D());
             double tonnage = vessel.GetTotalMass();
             Vessel nbparent = nearBeacon.vessel;
@@ -363,9 +461,9 @@ namespace ESLDCore
             double tripcost = getTripBaseCost(tripdist, tonnage, nbModel);
             double driftpenalty = Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5));
             if (driftpenalty > 0) GUILayout.Label("+" + driftpenalty + "% due to Drift.");
+            Dictionary<Part, string> HCUParts = getHCUParts(vessel);
             if (!nearBeacon.hasHCU)
             {
-                Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                 if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no Heisenkerb Compensator.", labelNoFuel);
                 if (vessel.GetCrewCount() > 0) GUILayout.Label("Transfer will kill crew.", labelNoFuel);
                 if (HCUParts.Count > 0)
@@ -390,9 +488,15 @@ namespace ESLDCore
             tripcost = Math.Round(tripcost * 100) / 100;
             if (nearBeacon.hasAMU)
             {
-                double AMUCost = getAMUCost(vessel, farBeacon, tonnage);
+                double AMUCost = getAMUCost(vessel, farBeacon, tonnage, nearBeacon.beaconModel);
                 GUILayout.Label("AMU Compensation adds " + AMUCost + " Karborundum.");
                 tripcost += AMUCost;
+            }
+            if (nearBeacon.hasHCU)
+            {
+                double adjHCUCost = HCUCost - (Math.Round(tripcost * 0.02 * 100) / 100);
+                GUILayout.Label("HCU Shielding adds " + adjHCUCost + " Karborundum.");
+                tripcost += adjHCUCost;
             }
             GUILayout.Label("Total Cost: " + tripcost + " Karborundum.");
             GUILayout.Label("Destination: " + farBeacon.mainBody.name + " at " + Math.Round(farBeacon.altitude / 1000) + "km.");
@@ -400,7 +504,7 @@ namespace ESLDCore
             GUILayout.Label("Transfer will emerge within " + precision + "m of destination beacon.");
             if (!nearBeacon.hasAMU)
             {
-                Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon);
+                Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
                 GUILayout.Label("Velocity relative to exit beacon will be " + Math.Round(transferVelOffset.magnitude) + "m/s.");
             }
             double retTripCost = 0;
@@ -424,16 +528,18 @@ namespace ESLDCore
             retTripCost = Math.Round(retTripCost * 100) / 100;
             if (retTripCost <= checkfuel)
             {
-                GUILayout.Label("Destination beacon can make return trip using " + retTripCost + " Karborundum.", labelHasFuel);
+                GUILayout.Label("Destination beacon can make return trip using " + retTripCost + " (base cost) Karborundum.", labelHasFuel);
             }
             else
             {
-                GUILayout.Label("Destination beacon would need  " + retTripCost + " Karborundum for return trip using active beacons.", labelNoFuel);
+                GUILayout.Label("Destination beacon would need  " + retTripCost + " (base cost) Karborundum for return trip using active beacons.", labelNoFuel);
             }
+            if (oPredict != null) updateExitOrbit(vessel, farBeacon, nearBeacon.beaconModel);
             if (GUILayout.Button("Confirm and Warp", buttonNeutral))
             {
                 RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
                 HailerGUIClose();
+                if (oPredict != null) hideExitOrbit(oPredict);
                 // Deduct jump fuel, abort if not enough.
                 var fuelBalance = tripcost;
                 KeyValuePair<string, CelestialBody> checkpath = HasTransferPath(nbparent, farBeacon, nearBeacon.gLimit); // One more check for a clear path in case they left the window open too long.
@@ -494,7 +600,7 @@ namespace ESLDCore
                             crewParts.RemoveAt(i);
                             tempCrew.Die();
                         }
-                        Dictionary<Part, string> HCUParts = getHCUParts(vessel);
+                        HCUParts = getHCUParts(vessel);
                         List<Part> HCUList = new List<Part>();
                         foreach (KeyValuePair<Part, string> HCUPart in HCUParts)
                         {
@@ -515,7 +621,7 @@ namespace ESLDCore
                             tempPart.Die();
                         }
                     }
-                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon);
+                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
                     if (nearBeacon.hasAMU) transferVelOffset = farBeacon.orbit.vel;
                     Vector3d spread = ((UnityEngine.Random.onUnitSphere + UnityEngine.Random.insideUnitSphere) / 2) * (float)precision;
                     vessel.Landed = false;
@@ -539,6 +645,7 @@ namespace ESLDCore
             {
                 RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
                 HailerGUIOpen();
+                if (oPredict != null) hideExitOrbit(oPredict);
             }
             GUILayout.EndVertical();
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
@@ -591,6 +698,7 @@ namespace ESLDCore
         public void HailerDeactivate()
         {
             part.deactivate();
+//            if (oPredict != null) hideExitOrbit(oPredict);
             HailerGUIClose();
             RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
             Events["HailerDeactivate"].active = false;
