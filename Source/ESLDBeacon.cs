@@ -91,7 +91,7 @@ namespace ESLDCore
                 BeaconShutdown();
             }
 
-            if (!requireResource(vessel, "ElectricCharge", Time.deltaTime * constantEC, true))
+            if (!requireResource(vessel, "ElectricCharge", TimeWarp.deltaTime * constantEC , true))
             {
                 ScreenMessages.PostScreenMessage("Warning: Electric Charge depleted.  Beacon has been shut down.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 BeaconShutdown();

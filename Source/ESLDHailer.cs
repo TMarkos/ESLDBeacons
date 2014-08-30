@@ -302,7 +302,7 @@ namespace ESLDCore
                     }
                 }
             }
-            if (nearBeacon != null && nearBeacon.vessel.loaded && nbWasUserSelected) // If we've already got one, just update the display.
+            if (nearBeacon != null && nearBeacon.vessel.loaded && nbWasUserSelected  && nearBeacon.activated) // If we've already got one, just update the display.
             {
                 nearBeaconDistance = Math.Round(Vector3d.Distance(vessel.GetWorldPos3D(), nearBeacon.vessel.GetWorldPos3D()));
                 nearBeaconRelVel = Math.Round(Vector3d.Magnitude(vessel.obt_velocity - nearBeacon.vessel.obt_velocity) * 10) / 10;
@@ -505,193 +505,185 @@ namespace ESLDCore
             GUIStyle labelNoFuel = new GUIStyle(GUI.skin.label);
             labelNoFuel.normal.textColor = Color.red;
             GUILayout.BeginVertical(HighLogic.Skin.scrollView);
-            double tripdist = Vector3d.Distance(nearBeacon.vessel.GetWorldPos3D(), farBeacon.GetWorldPos3D());
-            double tonnage = vessel.GetTotalMass();
-            Vessel nbparent = nearBeacon.vessel;
-            string nbModel = nearBeacon.beaconModel;
-            double tripcost = getTripBaseCost(tripdist, tonnage, nbModel);
-            double driftpenalty = Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5));
-            if (driftpenalty > 0) GUILayout.Label("+" + driftpenalty + "% due to Drift.");
-            Dictionary<Part, string> HCUParts = getHCUParts(vessel);
-            if (!nearBeacon.hasHCU)
+
+            if (nearBeacon != null)
             {
-                if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no Heisenkerb Compensator.", labelNoFuel);
-                if (vessel.GetCrewCount() > 0) GUILayout.Label("Transfer will kill crew.", labelNoFuel);
-                if (HCUParts.Count > 0)
+                double tripdist = Vector3d.Distance(nearBeacon.vessel.GetWorldPos3D(), farBeacon.GetWorldPos3D());
+                double tonnage = vessel.GetTotalMass();
+                Vessel nbparent = nearBeacon.vessel;
+                string nbModel = nearBeacon.beaconModel;
+                double tripcost = getTripBaseCost(tripdist, tonnage, nbModel);
+                double driftpenalty = Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5));
+                if (driftpenalty > 0) GUILayout.Label("+" + driftpenalty + "% due to Drift.");
+                Dictionary<Part, string> HCUParts = getHCUParts(vessel);
+                if (!nearBeacon.hasHCU)
                 {
-                    GUILayout.Label("These resources will destabilize in transit:", labelNoFuel);
-                    foreach (KeyValuePair<Part, string> hcuresource in HCUParts)
+                    if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no Heisenkerb Compensator.", labelNoFuel);
+                    if (vessel.GetCrewCount() > 0) GUILayout.Label("Transfer will kill crew.", labelNoFuel);
+                    if (HCUParts.Count > 0)
                     {
-                        GUILayout.Label(hcuresource.Key.name + " - " + hcuresource.Value, labelNoFuel);
+                        GUILayout.Label("These resources will destabilize in transit:", labelNoFuel);
+                        foreach (KeyValuePair<Part, string> hcuresource in HCUParts)
+                        {
+                            GUILayout.Label(hcuresource.Key.name + " - " + hcuresource.Value, labelNoFuel);
+                        }
                     }
                 }
-            }
-            GUILayout.Label("Confirm Warp:");
-            var basecost = Math.Round(tripcost * 100) / 100;
-            GUILayout.Label("Base Cost: " + basecost + " Karborundum.");
-            if (nearBeacon.hasSCU && driftpenalty == 0)
-            {
-                GUILayout.Label("Superconducting Coil Array reduces cost by 10%.");
-                tripcost *= 0.9;
-            }
-            if (driftpenalty > 0) GUILayout.Label("Relative speed and distance to beacon adds " + driftpenalty + "%.");
-            tripcost += tripcost * (driftpenalty * .01);
-            tripcost = Math.Round(tripcost * 100) / 100;
-            if (nearBeacon.hasAMU)
-            {
-                double AMUCost = getAMUCost(vessel, farBeacon, tonnage, nearBeacon.beaconModel);
-                GUILayout.Label("AMU Compensation adds " + AMUCost + " Karborundum.");
-                tripcost += AMUCost;
-            }
-            if (nearBeacon.hasHCU)
-            {
-                double adjHCUCost = HCUCost;
-                if (nearBeacon.beaconModel == "IB1") adjHCUCost = Math.Round((HCUCost - (tripcost * 0.02)) * 100) / 100;
-                GUILayout.Label("HCU Shielding adds " + adjHCUCost + " Karborundum.");
-                tripcost += adjHCUCost;
-            }
-            GUILayout.Label("Total Cost: " + tripcost + " Karborundum.");
-            GUILayout.Label("Destination: " + farBeacon.mainBody.name + " at " + Math.Round(farBeacon.altitude / 1000) + "km.");
-            precision = getTripSpread(tripdist, farBeaconModel);
-            GUILayout.Label("Transfer will emerge within " + precision + "m of destination beacon.");
-            if (!nearBeacon.hasAMU)
-            {
-                Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
-                GUILayout.Label("Velocity relative to exit beacon will be " + Math.Round(transferVelOffset.magnitude) + "m/s.");
-            }
-            double retTripCost = 0;
-            double checkfuel = 0;
-            bool fuelcheck = false;
-            foreach (ProtoPartSnapshot ppart in farBeacon.protoVessel.protoPartSnapshots)
-            {
-                foreach (ProtoPartModuleSnapshot pmod in ppart.modules)
+                GUILayout.Label("Confirm Warp:");
+                var basecost = Math.Round(tripcost * 100) / 100;
+                GUILayout.Label("Base Cost: " + basecost + " Karborundum.");
+                if (nearBeacon.hasSCU && driftpenalty == 0)
                 {
-                    if (pmod.moduleName == "ESLDBeacon" && pmod.moduleValues.GetValue("beaconStatus") == "Active.")
+                    GUILayout.Label("Superconducting Coil Array reduces cost by 10%.");
+                    tripcost *= 0.9;
+                }
+                if (driftpenalty > 0) GUILayout.Label("Relative speed and distance to beacon adds " + driftpenalty + "%.");
+                tripcost += tripcost * (driftpenalty * .01);
+                tripcost = Math.Round(tripcost * 100) / 100;
+                if (nearBeacon.hasAMU)
+                {
+                    double AMUCost = getAMUCost(vessel, farBeacon, tonnage, nearBeacon.beaconModel);
+                    GUILayout.Label("AMU Compensation adds " + AMUCost + " Karborundum.");
+                    tripcost += AMUCost;
+                }
+                if (nearBeacon.hasHCU)
+                {
+                    double adjHCUCost = HCUCost;
+                    if (nearBeacon.beaconModel == "IB1") adjHCUCost = Math.Round((HCUCost - (tripcost * 0.02)) * 100) / 100;
+                    GUILayout.Label("HCU Shielding adds " + adjHCUCost + " Karborundum.");
+                    tripcost += adjHCUCost;
+                }
+                GUILayout.Label("Total Cost: " + tripcost + " Karborundum.");
+                GUILayout.Label("Destination: " + farBeacon.mainBody.name + " at " + Math.Round(farBeacon.altitude / 1000) + "km.");
+                precision = getTripSpread(tripdist, farBeaconModel);
+                GUILayout.Label("Transfer will emerge within " + precision + "m of destination beacon.");
+                if (!nearBeacon.hasAMU)
+                {
+                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
+                    GUILayout.Label("Velocity relative to exit beacon will be " + Math.Round(transferVelOffset.magnitude) + "m/s.");
+                }
+                double retTripCost = 0;
+                double checkfuel = 0;
+                bool fuelcheck = false;
+                foreach (ProtoPartSnapshot ppart in farBeacon.protoVessel.protoPartSnapshots)
+                {
+                    foreach (ProtoPartModuleSnapshot pmod in ppart.modules)
                     {
-                        string pmodel = pmod.moduleValues.GetValue("beaconModel");
-                        fuelcheck = double.TryParse(pmod.moduleValues.GetValue("fuelOnBoard"), out checkfuel);
-                        if (retTripCost < getTripBaseCost(tripdist, tonnage, pmodel)) retTripCost = getTripBaseCost(tripdist, tonnage, pmodel);
+                        if (pmod.moduleName == "ESLDBeacon" && pmod.moduleValues.GetValue("beaconStatus") == "Active.")
+                        {
+                            string pmodel = pmod.moduleValues.GetValue("beaconModel");
+                            fuelcheck = double.TryParse(pmod.moduleValues.GetValue("fuelOnBoard"), out checkfuel);
+                            if (retTripCost < getTripBaseCost(tripdist, tonnage, pmodel)) retTripCost = getTripBaseCost(tripdist, tonnage, pmodel);
+                        }
                     }
                 }
-            }
-            string fuelmessage = "Destination beacon's fuel could not be checked.";
-            if (fuelcheck) fuelmessage = "Destination beacon has " + checkfuel + " Karborundum.";
-            GUILayout.Label(fuelmessage);
-            retTripCost = Math.Round(retTripCost * 100) / 100;
-            if (retTripCost <= checkfuel)
-            {
-                GUILayout.Label("Destination beacon can make return trip using " + retTripCost + " (base cost) Karborundum.", labelHasFuel);
+                string fuelmessage = "Destination beacon's fuel could not be checked.";
+                if (fuelcheck) fuelmessage = "Destination beacon has " + checkfuel + " Karborundum.";
+                GUILayout.Label(fuelmessage);
+                retTripCost = Math.Round(retTripCost * 100) / 100;
+                if (retTripCost <= checkfuel)
+                {
+                    GUILayout.Label("Destination beacon can make return trip using " + retTripCost + " (base cost) Karborundum.", labelHasFuel);
+                }
+                else
+                {
+                    GUILayout.Label("Destination beacon would need  " + retTripCost + " (base cost) Karborundum for return trip using active beacons.", labelNoFuel);
+                }
+                if (oPredict != null) updateExitOrbit(vessel, farBeacon, nearBeacon.beaconModel);
+                if (GUILayout.Button("Confirm and Warp", buttonNeutral))
+                {
+                    RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
+                    HailerGUIClose();
+                    if (oPredict != null) hideExitOrbit(oPredict);
+                    // Check transfer path one last time.
+                    KeyValuePair<string, CelestialBody> checkpath = HasTransferPath(nbparent, farBeacon, nearBeacon.gLimit); // One more check for a clear path in case they left the window open too long.
+                    bool finalPathCheck = false;
+                    if (checkpath.Key == "OK") finalPathCheck = true;
+                    // Check fuel one last time.
+                    fuelcheck = false;
+                    fuelcheck = nearBeacon.requireResource(nbparent, "Karborundum", tripcost, true);
+                    if (fuelcheck && finalPathCheck) // Fuel is paid for and path is clear.
+                    {
+                        // Buckle up!
+                        if (!nearBeacon.hasHCU) // Penalize for HCU not being present/online.
+                        {
+                            List<ProtoCrewMember> crewList = new List<ProtoCrewMember>();
+                            List<Part> crewParts = new List<Part>();
+                            foreach (Part vpart in vessel.Parts)
+                            {
+                                foreach (ProtoCrewMember crew in vpart.protoModuleCrew)
+                                {
+                                    crewParts.Add(vpart);
+                                    crewList.Add(crew);
+                                }
+                            }
+                            for (int i = crewList.Count - 1; i >= 0; i--)
+                            {
+                                if (i >= crewList.Count)
+                                {
+                                    if (crewList.Count == 0) break;
+                                    i = crewList.Count - 1;
+                                }
+                                ProtoCrewMember tempCrew = crewList[i];
+                                crewList.RemoveAt(i);
+                                ScreenMessages.PostScreenMessage(tempCrew.name + " was killed in transit!", 5.0f, ScreenMessageStyle.UPPER_CENTER);
+                                crewParts[i].RemoveCrewmember(tempCrew);
+                                crewParts.RemoveAt(i);
+                                tempCrew.Die();
+                            }
+                            HCUParts = getHCUParts(vessel);
+                            List<Part> HCUList = new List<Part>();
+                            foreach (KeyValuePair<Part, string> HCUPart in HCUParts)
+                            {
+                                HCUList.Add(HCUPart.Key);
+                            }
+                            HCUParts.Clear();
+                            for (int i = HCUList.Count - 1; i >= 0; i--)
+                            {
+                                if (i >= HCUList.Count)
+                                {
+                                    if (HCUList.Count == 0) break;
+                                    i = HCUList.Count - 1;
+                                }
+                                Part tempPart = HCUList[i];
+                                HCUList.RemoveAt(i);
+                                tempPart.explosionPotential = 1;
+                                tempPart.explode();
+                                tempPart.Die();
+                            }
+                        }
+                        Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
+                        if (nearBeacon.hasAMU) transferVelOffset = farBeacon.orbit.vel;
+                        Vector3d spread = ((UnityEngine.Random.onUnitSphere + UnityEngine.Random.insideUnitSphere) / 2) * (float)precision;
+                        vessel.Landed = false;
+                        vessel.Splashed = false;
+                        vessel.landedAt = string.Empty;
+                        OrbitPhysicsManager.HoldVesselUnpack(180);
+                        vessel.GoOnRails();
+                        vessel.situation = Vessel.Situations.ORBITING;
+                        vessel.orbit.UpdateFromStateVectors(farBeacon.orbit.pos + spread, transferVelOffset, farBeacon.mainBody, Planetarium.GetUniversalTime());
+                        vessel.orbit.Init();
+                        vessel.orbit.UpdateFromUT(Planetarium.GetUniversalTime());
+                        vessel.orbitDriver.pos = vessel.orbit.pos.xzy;
+                        vessel.orbitDriver.vel = vessel.orbit.vel;
+                    }
+                    else if (!fuelcheck && finalPathCheck)
+                    {
+                        ScreenMessages.PostScreenMessage("Jump failed!  Origin beacon did not have enough fuel to execute transfer.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
+                    }
+                    else if (!finalPathCheck)
+                    {
+                        ScreenMessages.PostScreenMessage("Jump Failed!  Transfer path has become obstructed.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
+                    }
+                    else
+                    {
+                        ScreenMessages.PostScreenMessage("Jump Failed!  Origin beacon cannot complete transfer.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
+                    }
+                }
             }
             else
             {
-                GUILayout.Label("Destination beacon would need  " + retTripCost + " (base cost) Karborundum for return trip using active beacons.", labelNoFuel);
-            }
-            if (oPredict != null) updateExitOrbit(vessel, farBeacon, nearBeacon.beaconModel);
-            if (GUILayout.Button("Confirm and Warp", buttonNeutral))
-            {
-                RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
-                HailerGUIClose();
                 if (oPredict != null) hideExitOrbit(oPredict);
-                // Deduct jump fuel, abort if not enough.
-                var fuelBalance = tripcost;
-                KeyValuePair<string, CelestialBody> checkpath = HasTransferPath(nbparent, farBeacon, nearBeacon.gLimit); // One more check for a clear path in case they left the window open too long.
-                bool finalPathCheck = false;
-                if (checkpath.Key == "OK")
-                {
-                    finalPathCheck = true;
-                }
-                else
-                {
-                    ScreenMessages.PostScreenMessage("Transfer path has become obstructed, aborting jump.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
-                }
-                foreach (Part bpart in nbparent.Parts) // Take our pound of flesh.
-                {
-                    foreach (PartResource bres in bpart.Resources)
-                    {
-                        if (bres.resourceName == "Karborundum")
-                        {
-                            if (bres.amount < fuelBalance)
-                            {
-                                fuelBalance -= bres.amount;
-                                bres.amount = 0;
-                            }
-                            else
-                            {
-                                bres.amount -= fuelBalance;
-                                fuelBalance = 0;
-                            }
-                        }
-                    }
-                }
-                if (fuelBalance == 0 && finalPathCheck) // Fuel is paid for and path is clear.
-                {
-                    // Buckle up!
-                    if (!nearBeacon.hasHCU) // Penalize for HCU not being present/online.
-                    {
-                        List<ProtoCrewMember> crewList = new List<ProtoCrewMember>();
-                        List<Part> crewParts = new List<Part>();
-                        foreach (Part vpart in vessel.Parts)
-                        {
-                            foreach (ProtoCrewMember crew in vpart.protoModuleCrew)
-                            {
-                                crewParts.Add(vpart);
-                                crewList.Add(crew);
-                            }
-                        }
-                        for (int i = crewList.Count - 1; i >= 0; i--)
-                        {
-                            if (i >= crewList.Count)
-                            {
-                                if (crewList.Count == 0) break;
-                                i = crewList.Count - 1;
-                            }
-                            ProtoCrewMember tempCrew = crewList[i];
-                            crewList.RemoveAt(i);
-                            ScreenMessages.PostScreenMessage(tempCrew.name + " was killed in transit!", 5.0f, ScreenMessageStyle.UPPER_CENTER);
-                            crewParts[i].RemoveCrewmember(tempCrew);
-                            crewParts.RemoveAt(i);
-                            tempCrew.Die();
-                        }
-                        HCUParts = getHCUParts(vessel);
-                        List<Part> HCUList = new List<Part>();
-                        foreach (KeyValuePair<Part, string> HCUPart in HCUParts)
-                        {
-                            HCUList.Add(HCUPart.Key);
-                        }
-                        HCUParts.Clear();
-                        for (int i = HCUList.Count - 1; i >= 0; i--)
-                        {
-                            if (i >= HCUList.Count)
-                            {
-                                if (HCUList.Count == 0) break;
-                                i = HCUList.Count - 1;
-                            }
-                            Part tempPart = HCUList[i];
-                            HCUList.RemoveAt(i);
-                            tempPart.explosionPotential = 1;
-                            tempPart.explode();
-                            tempPart.Die();
-                        }
-                    }
-                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
-                    if (nearBeacon.hasAMU) transferVelOffset = farBeacon.orbit.vel;
-                    Vector3d spread = ((UnityEngine.Random.onUnitSphere + UnityEngine.Random.insideUnitSphere) / 2) * (float)precision;
-                    vessel.Landed = false;
-                    vessel.Splashed = false;
-                    vessel.landedAt = string.Empty;
-                    OrbitPhysicsManager.HoldVesselUnpack(180);
-                    vessel.GoOnRails();
-                    vessel.situation = Vessel.Situations.ORBITING;
-                    vessel.orbit.UpdateFromStateVectors(farBeacon.orbit.pos + spread, transferVelOffset, farBeacon.mainBody, Planetarium.GetUniversalTime());
-                    vessel.orbit.Init();
-                    vessel.orbit.UpdateFromUT(Planetarium.GetUniversalTime());
-                    vessel.orbitDriver.pos = vessel.orbit.pos.xzy;
-                    vessel.orbitDriver.vel = vessel.orbit.vel;
-                }
-                else
-                {
-                    ScreenMessages.PostScreenMessage("Jump failed!  Origin beacon did not have enough fuel to execute transfer.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
-                }
             }
             if (!vessel.isActiveVessel)
             {
