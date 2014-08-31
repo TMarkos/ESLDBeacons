@@ -193,7 +193,7 @@ namespace ESLDCore
         {
             Vector3d velDiff = getJumpOffset(near, far, model) - far.orbit.vel;
             double comp = velDiff.magnitude;
-            return Math.Round(((comp * tton) / (comp + (tton * 25))) * 500) / 100;
+            return Math.Round(((comp * tton) / Math.Pow(Math.Log10(comp * tton),2)) / 2) / 100;
         }
 
         // Find parts that need a HCU to transfer.
@@ -210,7 +210,7 @@ namespace ESLDCore
                     if (vres.resourceName.ToLower().Contains(checkr) && vres.amount > 0)
                     {
                         if (HCUParts.Keys.Contains<Part>(vpart)) continue;
-                        HCUCost += (vres.info.density * vres.amount / 1.13);
+                        HCUCost += (vres.info.density * vres.amount * .02) / 0.02256;
                         HCUParts.Add(vpart, vres.resourceName);
                     }
                 }
@@ -680,6 +680,7 @@ namespace ESLDCore
                         vessel.Splashed = false;
                         vessel.landedAt = string.Empty;
                         OrbitPhysicsManager.HoldVesselUnpack(180);
+                        nbparent.GoOnRails();
                         vessel.GoOnRails();
                         vessel.situation = Vessel.Situations.ORBITING;
                         vessel.orbit.UpdateFromStateVectors(farBeacon.orbit.pos + spread, transferVelOffset, farBeacon.mainBody, Planetarium.GetUniversalTime());
