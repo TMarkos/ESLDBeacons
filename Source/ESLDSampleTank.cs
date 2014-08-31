@@ -13,7 +13,7 @@ namespace ESLDCore
         [KSPField(isPersistant = false, guiActive = false)]
         public float markdown;  // Set to negative number in part.cfg file.
 
-        public override void OnUpdate()
+        public float GetModuleCost()
         {
             foreach (PartResource pR in part.Resources)
             {
@@ -22,10 +22,6 @@ namespace ESLDCore
                     canisterSealed = false;
                 }
             }
-        }
-
-        public float GetModuleCost()
-        {
             if (!canisterSealed) return markdown;
             return 0.0f;
         }

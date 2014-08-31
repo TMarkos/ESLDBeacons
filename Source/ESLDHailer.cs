@@ -20,6 +20,8 @@ namespace ESLDCore
         public double precision;
         public OrbitDriver oPredictDriver = null;
         public OrbitRenderer oPredict = null;
+        public LineRenderer oDirection = null;
+        public GameObject oDirObj = null;
         public double lastRemDist;
         public bool wasInMapView;
         public bool nbWasUserSelected = false;
@@ -136,6 +138,24 @@ namespace ESLDCore
             oPredict.orbitColor = Color.red;
             oPredict.drawIcons = OrbitRenderer.DrawIcons.OBJ_PE_AP;
             oPredict.drawMode = OrbitRenderer.DrawMode.REDRAW_AND_RECALCULATE;
+
+            /* Directional indicator.
+            oDirObj = new GameObject("Indicator");
+            oDirObj.layer = 10; // Map layer!
+            oDirection = oDirObj.AddComponent<LineRenderer>();
+            Vector3d mapFarPos = ScaledSpace.LocalToScaledSpace(far.orbit.pos.xzy);
+            Vector3d mapNearPos = ScaledSpace.LocalToScaledSpace(near.orbit.pos.xzy);
+            oDirection.useWorldSpace = false;
+            oDirection.transform.parent = farTarget.transform;
+            oDirection.transform.localPosition = mapFarPos;
+            oDirection.material = new Material(Shader.Find("Particles/Additive"));
+            oDirection.SetColors(Color.green, Color.green);
+            
+            oDirection.SetWidth(2.0f, 2.0f);
+            oDirection.SetVertexCount(2);
+            oDirection.SetPosition(0, mapFarPos);
+            oDirection.SetPosition(1, mapFarPos + exitTraj);
+            oDirection.enabled = true;*/
         }
 
         // Update said predictions
@@ -189,6 +209,7 @@ namespace ESLDCore
                     foreach (string checkr in highEnergyResources)
                     if (vres.resourceName.ToLower().Contains(checkr) && vres.amount > 0)
                     {
+                        if (HCUParts.Keys.Contains<Part>(vpart)) continue;
                         HCUCost += (vres.info.density * vres.amount / 1.13);
                         HCUParts.Add(vpart, vres.resourceName);
                     }
