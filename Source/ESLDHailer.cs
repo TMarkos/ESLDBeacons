@@ -147,7 +147,8 @@ namespace ESLDCore
             Vector3d mapNearPos = ScaledSpace.LocalToScaledSpace(near.orbit.pos.xzy);
             oDirection.useWorldSpace = false;
             oDirection.transform.parent = farTarget.transform;
-            oDirection.transform.localPosition = mapFarPos;
+            oDirection.transform.localEulerAngles = Vector3d.zero;
+//            oDirection.transform.localPosition = mapFarPos;
             oDirection.material = new Material(Shader.Find("Particles/Additive"));
             oDirection.SetColors(Color.green, Color.green);
             
@@ -155,7 +156,8 @@ namespace ESLDCore
             oDirection.SetVertexCount(2);
             oDirection.SetPosition(0, mapFarPos);
             oDirection.SetPosition(1, mapFarPos + exitTraj);
-            oDirection.enabled = true;*/
+            oDirection.enabled = true;
+            // */
         }
 
         // Update said predictions
@@ -302,13 +304,13 @@ namespace ESLDCore
             double closest = 3000;
             foreach (Vessel craft in FlightGlobals.Vessels)
             {
-                if (craft.loaded == false) continue;                // Eliminate far away craft.
+                if (!craft.loaded) continue;                // Eliminate far away craft.
                 if (craft == vessel) continue;                      // Eliminate current craft.
                 if (craft == FlightGlobals.ActiveVessel) continue;
                 if (craft.FindPartModulesImplementing<ESLDBeacon>().Count == 0) continue; // Has beacon?
                 foreach (ESLDBeacon craftbeacon in craft.FindPartModulesImplementing<ESLDBeacon>())
                 {
-                    if (craftbeacon.activated == false) { continue; }   // Beacon active?
+                    if (!craftbeacon.activated) { continue; }   // Beacon active?
                     if (craftbeacon.beaconModel == "IB1") { continue; } // Jumpdrives can't do remote transfers.
                     string bIdentifier = craftbeacon.beaconModel + " (" + craft.vesselName + ")";
                     nearBeacons.Add(craftbeacon, bIdentifier);
@@ -323,7 +325,7 @@ namespace ESLDCore
                     }
                 }
             }
-            if (nearBeacon != null && nearBeacon.vessel.loaded && nbWasUserSelected  && nearBeacon.activated) // If we've already got one, just update the display.
+            if (nearBeacon != null && nearBeacon.vessel.loaded && nbWasUserSelected && nearBeacon.activated) // If we've already got one, just update the display.
             {
                 nearBeaconDistance = Math.Round(Vector3d.Distance(vessel.GetWorldPos3D(), nearBeacon.vessel.GetWorldPos3D()));
                 nearBeaconRelVel = Math.Round(Vector3d.Magnitude(vessel.obt_velocity - nearBeacon.vessel.obt_velocity) * 10) / 10;

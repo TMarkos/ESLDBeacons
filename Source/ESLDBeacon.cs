@@ -83,7 +83,7 @@ namespace ESLDCore
                 ScreenMessages.PostScreenMessage("Warning: Too deep in gravity well.  Beacon has been shut down for safety.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 BeaconShutdown();
             }
-            if (vessel.altitude < (vessel.mainBody.Radius * .25f))
+            if (vessel.altitude < (vessel.mainBody.Radius * 0.25f))
             {
                 string thevar = "";
                 if (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") thevar = "the ";
