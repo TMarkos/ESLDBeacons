@@ -85,8 +85,7 @@ namespace ESLDCore
             }
             if (vessel.altitude < (vessel.mainBody.Radius * 0.25f))
             {
-                string thevar = "";
-                if (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") thevar = "the ";
+                string thevar = (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") ? "the " : string.Empty;
                 ScreenMessages.PostScreenMessage("Warning: Too close to " + thevar + vessel.mainBody.name + ".  Beacon has been shut down for safety.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 BeaconShutdown();
             }
@@ -227,15 +226,13 @@ namespace ESLDCore
             if (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude > gLimit) // Check our G forces.
             {
                 print("Too deep in gravity well to activate!");
-                string thevar = "";
-                if (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") thevar = "the ";
+                string thevar = (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") ? "the " : string.Empty;
                 ScreenMessages.PostScreenMessage("Cannot activate!  Gravity from " + thevar + vessel.mainBody.name + " is too strong.",5.0f,ScreenMessageStyle.UPPER_CENTER);
                 return;
             }
             if (vessel.altitude < (vessel.mainBody.Radius * .25f)) // Check for radius limit.
             {
-                string thevar = "";
-                if (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") thevar = "the ";
+                string thevar = (vessel.mainBody.name == "Mun" || vessel.mainBody.name == "Sun") ? "the " : string.Empty;
                 ScreenMessages.PostScreenMessage("Cannot activate!  Beacon is too close to " + thevar + vessel.mainBody.name + ".", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 return;
             }

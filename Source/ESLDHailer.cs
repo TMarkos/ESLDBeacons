@@ -20,6 +20,7 @@ namespace ESLDCore
         public double precision;
         public OrbitDriver oPredictDriver = null;
         public OrbitRenderer oPredict = null;
+        public Transform oOrigin = null;
         public LineRenderer oDirection = null;
         public GameObject oDirObj = null;
         public double lastRemDist;
@@ -139,23 +140,29 @@ namespace ESLDCore
             oPredict.drawIcons = OrbitRenderer.DrawIcons.OBJ_PE_AP;
             oPredict.drawMode = OrbitRenderer.DrawMode.REDRAW_AND_RECALCULATE;
 
-            /* Directional indicator.
+            // Directional indicator.
             oDirObj = new GameObject("Indicator");
             oDirObj.layer = 10; // Map layer!
             oDirection = oDirObj.AddComponent<LineRenderer>();
-            Vector3d mapFarPos = ScaledSpace.LocalToScaledSpace(far.orbit.pos.xzy);
-            Vector3d mapNearPos = ScaledSpace.LocalToScaledSpace(near.orbit.pos.xzy);
             oDirection.useWorldSpace = false;
-            oDirection.transform.parent = farTarget.transform;
-            oDirection.transform.localEulerAngles = Vector3d.zero;
-//            oDirection.transform.localPosition = mapFarPos;
+            oOrigin = null;
+            foreach (Transform sstr in ScaledSpace.Instance.scaledSpaceTransforms)
+            {
+                if (sstr.name == far.mainBody.name)
+                {
+                    oOrigin = sstr;
+                    print("Found origin: " + sstr.name);
+                    break;
+                }
+            }
+            oDirection.transform.parent = oOrigin;
+            oDirection.transform.position = ScaledSpace.LocalToScaledSpace(far.transform.position);
             oDirection.material = new Material(Shader.Find("Particles/Additive"));
-            oDirection.SetColors(Color.green, Color.green);
-            
-            oDirection.SetWidth(2.0f, 2.0f);
+            oDirection.SetColors(Color.clear, Color.red);
+            oDirection.SetWidth(20.0f, 0.01f);
             oDirection.SetVertexCount(2);
-            oDirection.SetPosition(0, mapFarPos);
-            oDirection.SetPosition(1, mapFarPos + exitTraj);
+            oDirection.SetPosition(0, Vector3d.zero + exitTraj.xzy.normalized * 10);
+            oDirection.SetPosition(1, exitTraj.xzy.normalized * 50);
             oDirection.enabled = true;
             // */
         }
@@ -169,7 +176,12 @@ namespace ESLDCore
             oPredict.driver.pos = far.orbit.pos;
             oPredict.celestialBody = far.mainBody;
             oPredictDriver.orbit.UpdateFromStateVectors(far.orbit.pos, exitTraj, far.mainBody, Planetarium.GetUniversalTime());
-            //oPredictDriver.orbit.Init();
+
+            oDirection.transform.position = ScaledSpace.LocalToScaledSpace(far.transform.position);
+            oDirection.SetWidth(20.0f, 0.01f);
+            oDirection.SetPosition(0, Vector3d.zero + exitTraj.xzy.normalized * 10);
+            oDirection.SetPosition(1, exitTraj.xzy.normalized * 50);
+            oDirection.transform.eulerAngles = Vector3d.zero;
         }
 
         // Back out of orbital predictions.
@@ -178,6 +190,8 @@ namespace ESLDCore
             showOrbit.drawMode = OrbitRenderer.DrawMode.OFF;
             showOrbit.driver.drawOrbit = false;
             showOrbit.drawIcons = OrbitRenderer.DrawIcons.NONE;
+
+            oDirection.enabled = false;
 
             foreach (MapObject mobj in MapView.MapCamera.targets)
             {
@@ -482,8 +496,7 @@ namespace ESLDCore
                         {
                             print("Current beacon has a g limit of " + nearBeacon.gLimit);
                             string messageToPost = "Cannot Warp: Origin beacon has " + nbfuel + " of " + tripcost + " Karborundum required to warp.";
-                            string thevar = "";
-                            if (blockRock == "Mun" || blockRock == "Sun") thevar = "the ";
+                            string thevar = (blockRock == "Mun" || blockRock == "Sun") ? "the " : string.Empty;
                             if (fuelstate == buttonNoPath && blockReason == "Gravity") messageToPost = "Cannot Warp: Path of transfer intersects a high-gravity area around " + thevar + blockRock + ".";
                             if (fuelstate == buttonNoPath && blockReason == "Proximity") messageToPost = "Cannot Warp: Path of transfer passes too close to " + thevar + blockRock + ".";
                             ScreenMessages.PostScreenMessage(messageToPost, 5.0f, ScreenMessageStyle.UPPER_CENTER);
