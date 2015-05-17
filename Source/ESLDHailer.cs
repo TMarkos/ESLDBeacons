@@ -217,7 +217,7 @@ namespace ESLDCore
         private Dictionary<Part, string> getHCUParts(Vessel craft)
         {
             HCUCost = 0;
-            Array highEnergyResources = new string[7] { "karborundum", "uranium", "plutonium", "antimatter", "thorium", "nuclear", "exotic" };
+            Array highEnergyResources = new string[14] { "karborundum", "uranium", "uraninite", "plutonium", "antimatter", "thorium", "nuclear", "exotic", "actinides", "chargedparticles", "fluorine", "lqdhe3", "tritium", "thf4"};
             Dictionary<Part, string> HCUParts = new Dictionary<Part, string>();
             foreach (Part vpart in vessel.Parts)
             {
