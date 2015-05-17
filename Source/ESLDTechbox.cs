@@ -45,7 +45,7 @@ namespace ESLDCore
                 beacon.checkOwnTechBoxes();
             }
         }
-
+        
         [KSPEvent(name = "TechBoxOff", active = false, guiActive = true, guiName = "Deactivate")]
         public void TechBoxOff()
         {

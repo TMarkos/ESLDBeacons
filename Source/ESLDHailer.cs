@@ -167,6 +167,7 @@ namespace ESLDCore
             // */
         }
 
+
         // Update said predictions
         private void updateExitOrbit(Vessel near, Vessel far, string model)
         {
