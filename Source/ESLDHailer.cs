@@ -227,7 +227,7 @@ namespace ESLDCore
                     if (vres.resourceName.ToLower().Contains(checkr) && vres.amount > 0)
                     {
                         if (HCUParts.Keys.Contains<Part>(vpart)) continue;
-                        HCUCost += (vres.info.density * vres.amount * .02) / 0.02256;
+                        HCUCost += (vres.info.density * vres.amount * 0.1) / 0.0058;
                         HCUParts.Add(vpart, vres.resourceName);
                     }
                 }
