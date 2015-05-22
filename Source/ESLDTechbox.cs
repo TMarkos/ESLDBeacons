@@ -22,11 +22,11 @@ namespace ESLDCore
         {
             ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
             MAG.Events["Toggle"].guiActive = false;
-            if (activated && MAG.Progress == 0)
+            if (activated && MAG.Progress == 0 && !MAG.IsMoving())
             {
                 MAG.Toggle();
             }
-            else if (!activated && MAG.Progress == 1)
+            else if (!activated && MAG.Progress == 1 && !MAG.IsMoving())
             {
                 MAG.Toggle();
             }

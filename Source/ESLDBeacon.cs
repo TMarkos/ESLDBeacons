@@ -57,10 +57,10 @@ namespace ESLDCore
             Fields["constantEC"].guiActive = activated;
             ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
             MAG.Events["Toggle"].guiActive = false;
-            if (activated && MAG.Progress == 0)
+            if (activated && MAG.Progress == 0 && !MAG.IsMoving())
             {
                 MAG.Toggle();
-            } else if (!activated && MAG.Progress == 1)
+            } else if (!activated && MAG.Progress == 1 && !MAG.IsMoving())
             {
                 MAG.Toggle();
             }
@@ -96,6 +96,7 @@ namespace ESLDCore
                 ScreenMessages.PostScreenMessage("Warning: Electric Charge depleted.  Beacon has been shut down.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 BeaconShutdown();
             }
+//          part.AddThermalFlux(TimeWarp.deltaTime * constantEC * 10);  // Not feasible until the fluctuation with high warp is nailed down.
 
             if (!requireResource(vessel, "Karborundum", 0.1, false))
             {
@@ -127,6 +128,7 @@ namespace ESLDCore
             }
             double neededMult = 10;
             double constantDiv = 50;
+            double baseLimit = gLimit;
             if (hasGMU)
             {
                 gLimit *= 1.25;
@@ -135,8 +137,8 @@ namespace ESLDCore
             }
             double limbo = Math.Round((Math.Sqrt((6.673E-11 * targetbody.Mass) / gLimit) - targetbody.Radius));
             if (limbo < targetbody.Radius * 0.25) limbo = targetbody.Radius * 0.25;
-            neededEC = Math.Round(fuelOnBoard * neededMult * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / gLimit));
-            constantEC = Math.Round(fuelOnBoard / constantDiv * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / gLimit) * 100) / 100;
+            neededEC = Math.Round(fuelOnBoard * neededMult * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit));
+            constantEC = Math.Round(fuelOnBoard / constantDiv * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit) * 100) / 100;
             return limbo / 1000;
         }
 
@@ -242,6 +244,7 @@ namespace ESLDCore
                 ScreenMessages.PostScreenMessage("Cannot activate!  Insufficient electric power to initiate reaction.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
                 return;
             }
+//          part.AddThermalFlux(neededEC * 10);
             ModuleAnimateGeneric MAG = part.FindModuleImplementing<ModuleAnimateGeneric>();
             print("Activating beacon!  Toggling MAG from " + MAG.status + "-" + MAG.Progress);
             print("EC Activation charge at " + neededEC + "(" + FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude + "/" + gLimit + ", " + fuelOnBoard + ")");
