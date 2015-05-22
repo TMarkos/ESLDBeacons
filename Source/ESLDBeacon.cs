@@ -49,6 +49,7 @@ namespace ESLDCore
         public bool hasHCU = false;
         public bool hasGMU = false;
         public bool hasSCU = false;
+        public double massBonus = 1;
 
         public override void OnUpdate()
         {
@@ -133,13 +134,20 @@ namespace ESLDCore
             {
                 gLimit *= 1.25;
                 neededMult = 15;
-                constantDiv = 100 / 3;
+                constantDiv = 5;
+                double massOffset = (Math.Pow(Math.Abs(Math.Log(vessel.GetTotalMass() / 10, 2.25)), 4) * baseLimit) / 1500;
+                massBonus = 1 - massOffset;
+                if (massBonus < 0)
+                {
+                    massBonus = 0;
+                }
             }
-            double limbo = Math.Round((Math.Sqrt((6.673E-11 * targetbody.Mass) / gLimit) - targetbody.Radius));
+            double limbo = (Math.Sqrt((6.673E-11 * targetbody.Mass) / gLimit) - targetbody.Radius) * massBonus;
+            gLimit = (6.673E-11 * targetbody.Mass) / Math.Pow(limbo + targetbody.Radius, 2);
             if (limbo < targetbody.Radius * 0.25) limbo = targetbody.Radius * 0.25;
             neededEC = Math.Round(fuelOnBoard * neededMult * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit));
             constantEC = Math.Round(fuelOnBoard / constantDiv * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit) * 100) / 100;
-            return limbo / 1000;
+            return Math.Round(limbo / 1000);
         }
 
         public void checkOwnTechBoxes()

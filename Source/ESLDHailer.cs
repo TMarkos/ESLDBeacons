@@ -450,7 +450,7 @@ namespace ESLDCore
                 Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                 if (!nearBeacon.hasHCU)
                 {
-                    if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no Heisenkerb Compensator.");
+                    if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no active Heisenkerb Compensator.");
                     if (vessel.GetCrewCount() > 0) GUILayout.Label("Transfer will kill crew.");
                     if (HCUParts.Count > 0) GUILayout.Label("Some resources will destabilize.");
                 }
@@ -555,7 +555,7 @@ namespace ESLDCore
                 Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                 if (!nearBeacon.hasHCU)
                 {
-                    if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no Heisenkerb Compensator.", labelNoFuel);
+                    if (vessel.GetCrewCount() > 0 || HCUParts.Count > 0) GUILayout.Label("WARNING: This beacon has no active Heisenkerb Compensator.", labelNoFuel);
                     if (vessel.GetCrewCount() > 0) GUILayout.Label("Transfer will kill crew.", labelNoFuel);
                     if (HCUParts.Count > 0)
                     {
