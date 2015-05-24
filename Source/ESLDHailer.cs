@@ -445,7 +445,7 @@ namespace ESLDCore
                 string nbModel = nearBeacon.beaconModel;
                 nearBeacon.checkOwnTechBoxes();
                 double nbfuel = nearBeacon.fuelOnBoard;
-                double driftpenalty = Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5));
+                double driftpenalty = Math.Round(Math.Pow(Math.Floor(nearBeaconDistance / 200), 2) + Math.Floor(Math.Pow(nearBeaconRelVel, 1.5)) * nearBeacon.getCrewBonuses(nbparent,"Pilot",0.5,5));
                 if (driftpenalty > 0) GUILayout.Label("+" + driftpenalty + "% due to Drift.");
                 Dictionary<Part, string> HCUParts = getHCUParts(vessel);
                 if (!nearBeacon.hasHCU)
@@ -465,6 +465,7 @@ namespace ESLDCore
                     double adjHCUCost = HCUCost;
                     if (nearBeacon.beaconModel == "IB1") adjHCUCost = Math.Round((HCUCost - (tripcost * 0.02)) * 100) / 100;
                     if (nearBeacon.hasHCU) tripcost += adjHCUCost;
+                    if (nearBeacon.hasSCU) tripcost = tripcost * nearBeacon.getCrewBonuses(nbparent, "Scientist", 0.5, 5);
                     tripcost = Math.Round(tripcost * 100) / 100;
                     string targetSOI = ftarg.Key.mainBody.name;
                     double targetAlt = Math.Round(ftarg.Key.altitude / 1000);
@@ -491,7 +492,9 @@ namespace ESLDCore
                             drawConfirm();
                             if (!nearBeacon.hasAMU) showExitOrbit(vessel, farBeacon, nearBeacon.beaconModel);
                             RenderingManager.AddToPostDrawQueue(4, new Callback(drawConfirm));
-                            HailerGUIClose();
+                            RenderingManager.RemoveFromPostDrawQueue(3, new Callback(drawGUI));
+                            Events["HailerGUIClose"].active = false;
+                            Events["HailerGUIOpen"].active = true;
                         }
                         else
                         {
@@ -569,10 +572,20 @@ namespace ESLDCore
                 GUILayout.Label("Confirm Warp:");
                 var basecost = Math.Round(tripcost * 100) / 100;
                 GUILayout.Label("Base Cost: " + basecost + " Karborundum.");
-                if (nearBeacon.hasSCU && driftpenalty == 0)
+                double sciBonus = nearBeacon.getCrewBonuses(nbparent, "Scientist", 0.5, 5);
+                if (nearBeacon.hasSCU)
                 {
-                    GUILayout.Label("Superconducting Coil Array reduces cost by 10%.");
-                    tripcost *= 0.9;
+                    if (driftpenalty == 0 && sciBonus >= 0.9)
+                    {
+                        GUILayout.Label("Superconducting Coil Array reduces cost by 10%.");
+                        tripcost *= 0.9;
+                    }
+                    if (sciBonus < 0.9 || (sciBonus < 1 && driftpenalty > 0))
+                    {
+                        double dispBonus = Math.Round((1-sciBonus) * 100);
+                        GUILayout.Label("Scientists on beacon vessel reduce cost by " + dispBonus + "%.");
+                    }
+                    
                 }
                 if (driftpenalty > 0) GUILayout.Label("Relative speed and distance to beacon adds " + driftpenalty + "%.");
                 tripcost += tripcost * (driftpenalty * .01);
@@ -785,7 +798,7 @@ namespace ESLDCore
         public void HailerDeactivate()
         {
             part.deactivate();
-//            if (oPredict != null) hideExitOrbit(oPredict);
+            if (oPredict != null) hideExitOrbit(oPredict);
             HailerGUIClose();
             RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
             Events["HailerDeactivate"].active = false;

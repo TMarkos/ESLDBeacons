@@ -106,6 +106,25 @@ namespace ESLDCore
             }
         }
 
+        public double getCrewBonuses(Vessel craft, string neededTrait, double maxBenefit, int countCap)
+        {
+            int bonus = 0;
+            int ccount = 0;
+            foreach (ProtoCrewMember crew in vessel.GetVesselCrew())
+            {
+                if (crew.experienceTrait.Title == neededTrait) 
+                {
+                    bonus += crew.experienceLevel;
+                    ccount += 1;
+                }
+            }
+            if (ccount == 0) return 1;
+            double bonusAvg = bonus / ccount;
+            if (ccount > countCap) { ccount = countCap; }
+            double endBenefit = 1 - (maxBenefit * ((ccount * bonusAvg) / 25));
+            return endBenefit;
+        }
+
         // Given a target body, get minimum ASL where beacon can function in km.
         public double findAcceptableAltitude(CelestialBody targetbody)
         {
@@ -145,8 +164,8 @@ namespace ESLDCore
             double limbo = (Math.Sqrt((6.673E-11 * targetbody.Mass) / gLimit) - targetbody.Radius) * massBonus;
             gLimit = (6.673E-11 * targetbody.Mass) / Math.Pow(limbo + targetbody.Radius, 2);
             if (limbo < targetbody.Radius * 0.25) limbo = targetbody.Radius * 0.25;
-            neededEC = Math.Round(fuelOnBoard * neededMult * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit));
-            constantEC = Math.Round(fuelOnBoard / constantDiv * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit) * 100) / 100;
+            neededEC = Math.Round((fuelOnBoard * neededMult * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit)) * getCrewBonuses(vessel, "Engineer", 0.5, 5));
+            constantEC = Math.Round(fuelOnBoard / constantDiv * (FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D()).magnitude / baseLimit) * 100 * getCrewBonuses(vessel, "Engineer", 0.5, 5)) / 100;
             return Math.Round(limbo / 1000);
         }
 
@@ -229,6 +248,12 @@ namespace ESLDCore
         public void BeaconInitialize()
         {
             checkOwnTechBoxes();
+            print("Crew bonus: Engineers on board reduce electrical usage by:");
+            print(getCrewBonuses(vessel, "Engineer", 0.5, 5));
+            print("Crew bonus: Scientists on board reduce Karborundum costs by:");
+            print(getCrewBonuses(vessel, "Scientist", 0.5, 5));
+            print("Crew bonus: Pilots on board reduce drift by:");
+            print(getCrewBonuses(vessel, "Pilot", 0.5, 5));
             if (!requireResource(vessel, "Karborundum", 0.1, false))
             {
                 ScreenMessages.PostScreenMessage("Cannot activate!  Insufficient Karborundum to initiate reaction.", 5.0f, ScreenMessageStyle.UPPER_CENTER);
