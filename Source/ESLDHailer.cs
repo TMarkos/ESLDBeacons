@@ -458,14 +458,25 @@ namespace ESLDCore
                 {
                     double tripdist = Vector3d.Distance(nbparent.GetWorldPos3D(), ftarg.Key.GetWorldPos3D());
                     double tripcost = getTripBaseCost(tripdist, tonnage, nbModel);
-                    if (nearBeacon.hasSCU && driftpenalty == 0) tripcost *= 0.9;
+                    double sciBonus = nearBeacon.getCrewBonuses(nbparent, "Scientist", 0.5, 5);
+                    if (nearBeacon.hasSCU)
+                    {
+                        if (driftpenalty == 0 && sciBonus >= 0.9)
+                        {
+                            tripcost *= 0.9;
+                        }
+                        if (sciBonus < 0.9 || (sciBonus < 1 && driftpenalty > 0))
+                        {
+                            tripcost *= sciBonus;
+                        }
+
+                    }
                     if (tripcost == 0) continue;
                     tripcost += tripcost * (driftpenalty * .01);
                     if (nearBeacon.hasAMU) tripcost += getAMUCost(vessel, ftarg.Key, tonnage, nearBeacon.beaconModel);
                     double adjHCUCost = HCUCost;
                     if (nearBeacon.beaconModel == "IB1") adjHCUCost = Math.Round((HCUCost - (tripcost * 0.02)) * 100) / 100;
                     if (nearBeacon.hasHCU) tripcost += adjHCUCost;
-                    if (nearBeacon.hasSCU) tripcost = tripcost * nearBeacon.getCrewBonuses(nbparent, "Scientist", 0.5, 5);
                     tripcost = Math.Round(tripcost * 100) / 100;
                     string targetSOI = ftarg.Key.mainBody.name;
                     double targetAlt = Math.Round(ftarg.Key.altitude / 1000);
@@ -584,6 +595,7 @@ namespace ESLDCore
                     {
                         double dispBonus = Math.Round((1-sciBonus) * 100);
                         GUILayout.Label("Scientists on beacon vessel reduce cost by " + dispBonus + "%.");
+                        tripcost *= sciBonus;
                     }
                     
                 }
