@@ -30,6 +30,10 @@ namespace ESLDCore
                 {
                     canHail = true;
                     hailer = vessel.FindPartModulesImplementing<ESLDHailer>().First();
+                    foreach (ESLDHailer ehail in vessel.FindPartModulesImplementing<ESLDHailer>())
+                    {
+                        ehail.masterClass = this;
+                    }
                 }
             }
             if (canHail && this.button == null)
@@ -125,6 +129,40 @@ namespace ESLDCore
             {
                 ApplicationLauncher.Instance.RemoveModApplication(button);
             }
+        }
+
+        // Finds if the path between beacons passes too close to a planet or is within its gravity well.
+        public KeyValuePair<string, CelestialBody> HasTransferPath(Vessel vOrigin, Vessel vDestination, double gLimit)
+        {
+            // Cribbed with love from RemoteTech.  I have no head for vectors.
+            var returnPair = new KeyValuePair<string, CelestialBody>("start", vOrigin.mainBody);
+            Vector3d opos = vOrigin.GetWorldPos3D();
+            Vector3d dpos = vDestination.GetWorldPos3D();
+            foreach (CelestialBody rock in FlightGlobals.Bodies)
+            {
+                Vector3d bodyFromOrigin = rock.position - opos;
+                Vector3d destFromOrigin = dpos - opos;
+                if (Vector3d.Dot(bodyFromOrigin, destFromOrigin) <= 0) continue;
+                Vector3d destFromOriginNorm = destFromOrigin.normalized;
+                if (Vector3d.Dot(bodyFromOrigin, destFromOriginNorm) >= destFromOrigin.magnitude) continue;
+                Vector3d lateralOffset = bodyFromOrigin - Vector3d.Dot(bodyFromOrigin, destFromOriginNorm) * destFromOriginNorm;
+                double limbo = Math.Sqrt((6.673E-11 * rock.Mass) / gLimit) - rock.Radius; // How low can we go?
+                string limbotype = "Gravity";
+                if (limbo < rock.Radius + rock.Radius * 0.25)
+                {
+                    limbo = rock.Radius + rock.Radius * .025;
+                    limbotype = "Proximity";
+                }
+                if (lateralOffset.magnitude < limbo)
+                {
+                    returnPair = new KeyValuePair<string, CelestialBody>(limbotype, rock);
+                    //print("Lateral Offset was " + lateralOffset.magnitude + "m and needed to be " + limbo + "m, failed due to " + limbotype + " check for " + rock.name + ".");
+                    return returnPair;
+                }
+            }
+            if (FlightGlobals.getGeeForceAtPosition(vDestination.GetWorldPos3D()).magnitude > gLimit) return new KeyValuePair<string, CelestialBody>("Gravity", vDestination.mainBody);
+            returnPair = new KeyValuePair<string, CelestialBody>("OK", null);
+            return returnPair;
         }
     }
         

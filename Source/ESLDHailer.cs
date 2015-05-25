@@ -29,6 +29,7 @@ namespace ESLDCore
         public int currentBeaconIndex;
         public string currentBeaconDesc;
         public double HCUCost = 0;
+        public HailerButton masterClass = null;
 
         // GUI Open?
         [KSPField(guiName = "GUIOpen", isPersistant = true, guiActive = false)]
@@ -74,9 +75,13 @@ namespace ESLDCore
                 farRealVelocity += farRefbody.orbit.vel;
                 farRefbody = farRefbody.referenceBody;
             }
-            if (model == "LB10") farRealVelocity -= far.orbit.vel; // LB10s don't respect destination velocity.
             Vector3d nearRealVelocity = near.orbit.vel;
             CelestialBody nearRefbody = near.mainBody;
+            if (near.mainBody.flightGlobalsIndex == far.mainBody.flightGlobalsIndex)
+            {
+                farRealVelocity -= far.orbit.vel;
+//              print("In-system transfer, disregarding far beacon velocity.");
+            }
             while (nearRefbody.flightGlobalsIndex != 0) // Kerbol
             {
                 nearRealVelocity += nearRefbody.orbit.vel;
@@ -260,40 +265,6 @@ namespace ESLDCore
                     break;
             }
             return Math.Round(Math.Log(tripdist) / Math.Log(driftmodifier) * 10) * 100;
-        }
-
-        // Finds if the path between beacons passes too close to a planet or is within its gravity well.
-        public KeyValuePair<string, CelestialBody> HasTransferPath(Vessel vOrigin, Vessel vDestination, double gLimit)
-        {
-            // Cribbed with love from RemoteTech.  I have no head for vectors.
-            var returnPair = new KeyValuePair<string, CelestialBody>("start", vOrigin.mainBody);
-            Vector3d opos = vOrigin.GetWorldPos3D();
-            Vector3d dpos = vDestination.GetWorldPos3D();
-            foreach (CelestialBody rock in FlightGlobals.Bodies)
-            {
-                Vector3d bodyFromOrigin = rock.position - opos;
-                Vector3d destFromOrigin = dpos - opos;
-                if (Vector3d.Dot(bodyFromOrigin, destFromOrigin) <= 0) continue;
-                Vector3d destFromOriginNorm = destFromOrigin.normalized;
-                if (Vector3d.Dot(bodyFromOrigin, destFromOriginNorm) >= destFromOrigin.magnitude) continue;
-                Vector3d lateralOffset = bodyFromOrigin - Vector3d.Dot(bodyFromOrigin, destFromOriginNorm) * destFromOriginNorm;
-                double limbo = Math.Sqrt((6.673E-11 * rock.Mass) / gLimit) - rock.Radius; // How low can we go?
-                string limbotype = "Gravity";
-                if (limbo < rock.Radius + rock.Radius * 0.25)
-                {
-                    limbo = rock.Radius + rock.Radius * .025;
-                    limbotype = "Proximity";
-                }
-                if (lateralOffset.magnitude < limbo)
-                {
-                    returnPair = new KeyValuePair<string, CelestialBody>(limbotype, rock);
-                    //print("Lateral Offset was " + lateralOffset.magnitude + "m and needed to be " + limbo + "m, failed due to " + limbotype + " check for " + rock.name + ".");
-                    return returnPair;
-                }
-            }
-            if (FlightGlobals.getGeeForceAtPosition(vDestination.GetWorldPos3D()).magnitude > gLimit) return new KeyValuePair<string, CelestialBody>("Gravity", vDestination.mainBody);
-            returnPair = new KeyValuePair<string, CelestialBody>("OK", null);
-            return returnPair;
         }
 
         // Find loaded beacons.  Only in physics distance, since otherwise they're too far out.
@@ -486,7 +457,7 @@ namespace ESLDCore
                     if (tripcost <= nbfuel) // Show blocked status only for otherwise doable transfers.
                     {
                         fuelstate = buttonHasFuel;
-                        KeyValuePair<string, CelestialBody> checkpath = HasTransferPath(nbparent, ftarg.Key, nearBeacon.gLimit);
+                        KeyValuePair<string, CelestialBody> checkpath = masterClass.HasTransferPath(nbparent, ftarg.Key, nearBeacon.gLimit);
                         if (checkpath.Key != "OK")
                         {
                             fuelstate = buttonNoPath;
@@ -621,7 +592,7 @@ namespace ESLDCore
                 GUILayout.Label("Transfer will emerge within " + precision + "m of destination beacon.");
                 if (!nearBeacon.hasAMU)
                 {
-                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
+                    Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel) - farBeacon.orbit.vel;
                     GUILayout.Label("Velocity relative to exit beacon will be " + Math.Round(transferVelOffset.magnitude) + "m/s.");
                 }
                 double retTripCost = 0;
@@ -658,7 +629,7 @@ namespace ESLDCore
                     HailerGUIClose();
                     if (oPredict != null) hideExitOrbit(oPredict);
                     // Check transfer path one last time.
-                    KeyValuePair<string, CelestialBody> checkpath = HasTransferPath(nbparent, farBeacon, nearBeacon.gLimit); // One more check for a clear path in case they left the window open too long.
+                    KeyValuePair<string, CelestialBody> checkpath = masterClass.HasTransferPath(nbparent, farBeacon, nearBeacon.gLimit); // One more check for a clear path in case they left the window open too long.
                     bool finalPathCheck = false;
                     if (checkpath.Key == "OK") finalPathCheck = true;
                     // Check fuel one last time.
