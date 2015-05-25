@@ -685,6 +685,7 @@ namespace ESLDCore
                                 tempPart.Die();
                             }
                         }
+                        masterClass.dazzle();
                         Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel);
                         if (nearBeacon.hasAMU) transferVelOffset = farBeacon.orbit.vel;
                         Vector3d spread = ((UnityEngine.Random.onUnitSphere + UnityEngine.Random.insideUnitSphere) / 2) * (float)precision;

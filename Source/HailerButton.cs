@@ -15,6 +15,12 @@ namespace ESLDCore
         private ESLDHailer hailer;
         private bool canHail = false;
         private Texture2D ESLDButtonOn = new Texture2D(38, 38, TextureFormat.ARGB32, false);
+        public FlightCamera mainCam = null;
+        public bool isDazzling = false;
+        private float currentFOV = 60;
+        private float userFOV = 60;
+        private float currentDistance = 1;
+        private float userDistance = 1;
 
         public void Update()
         {
@@ -58,12 +64,33 @@ namespace ESLDCore
             }
         }
 
+        public void FixedUpdate()
+        {
+            if (isDazzling)
+            {
+                currentFOV = Mathf.Lerp(currentFOV, userFOV, 0.04f);
+                currentDistance = Mathf.Lerp(currentDistance, userDistance, 0.04f);
+                mainCam.SetFoV(currentFOV);
+                mainCam.SetDistance(currentDistance);
+                print("Distance: " + currentDistance);
+                if (userFOV + 0.25 >= currentFOV)
+                {
+                    mainCam.SetFoV(userFOV);
+                    mainCam.SetDistance(userDistance);
+                    print("Done messing with camera!");
+                    isDazzling = false;
+                }
+                
+            }
+        }
+
         public void Awake()
         {
             GameEvents.onGUIApplicationLauncherReady.Add(onGUIApplicationLauncherReady);
             GameEvents.onGameSceneLoadRequested.Add(onSceneChangeRequest);
             GameEvents.onVesselChange.Add(onVesselChange);
             ESLDButtonOn = GameDatabase.Instance.GetTexture("ESLDBeacons/Textures/launcher", false);
+            mainCam = FlightCamera.fetch;
         }
 
         public void onDestroy()
@@ -129,6 +156,17 @@ namespace ESLDCore
             {
                 ApplicationLauncher.Instance.RemoveModApplication(button);
             }
+        }
+
+        // Warp Effect
+        public void dazzle()
+        {
+            userFOV = mainCam.FieldOfView;
+            userDistance = mainCam.Distance;
+            currentFOV = 180;
+            currentDistance = 0.1f;
+            isDazzling = true;
+            print("Messing with camera!");
         }
 
         // Finds if the path between beacons passes too close to a planet or is within its gravity well.
