@@ -16,7 +16,6 @@ namespace ESLDCore
         public string farBeaconModel = "";
         public Dictionary<Vessel, string> farTargets = new Dictionary<Vessel, string>();
         public Dictionary<ESLDBeacon, string> nearBeacons = new Dictionary<ESLDBeacon, string>();
-        public bool isJumping = false;
         public double precision;
         public OrbitDriver oPredictDriver = null;
         public OrbitRenderer oPredict = null;
@@ -26,6 +25,8 @@ namespace ESLDCore
         public double lastRemDist;
         public bool wasInMapView;
         public bool nbWasUserSelected = false;
+        public bool isJumping = false;
+        public bool isActive = false;
         public int currentBeaconIndex;
         public string currentBeaconDesc;
         public double HCUCost = 0;
@@ -109,12 +110,19 @@ namespace ESLDCore
         // Show exit orbital predictions
         private void showExitOrbit(Vessel near, Vessel far, string model)
         {
+            float baseWidth = 20.0f;
+            double baseStart = 10;
+            double baseEnd = 50;
             // Recenter map, save previous state.
             wasInMapView = MapView.MapIsEnabled;
             if (!MapView.MapIsEnabled) MapView.EnterMapView();
             print("Finding target.");
             MapObject farTarget = findVesselBody(far);
             if (farTarget != null) MapView.MapCamera.SetTarget(farTarget);
+            Vector3 mapCamPos = ScaledSpace.ScaledToLocalSpace(MapView.MapCamera.transform.position);
+            Vector3 farTarPos = ScaledSpace.ScaledToLocalSpace(farTarget.transform.position);
+            float dirScalar = Vector3.Distance(mapCamPos, farTarPos);
+            print("Initializing, camera distance is " + dirScalar);
 
             // Initialize projection stuff.
             print("Beginning orbital projection.");
@@ -164,10 +172,16 @@ namespace ESLDCore
             oDirection.transform.position = ScaledSpace.LocalToScaledSpace(far.transform.position);
             oDirection.material = new Material(Shader.Find("Particles/Additive"));
             oDirection.SetColors(Color.clear, Color.red);
-            oDirection.SetWidth(20.0f, 0.01f);
+            if (dirScalar / 325000 > baseWidth) baseWidth = dirScalar / 325000f;
+            oDirection.SetWidth(baseWidth, 0.01f);
+            print("Base Width set to " + baseWidth);
             oDirection.SetVertexCount(2);
-            oDirection.SetPosition(0, Vector3d.zero + exitTraj.xzy.normalized * 10);
-            oDirection.SetPosition(1, exitTraj.xzy.normalized * 50);
+            if (dirScalar / 650000 > baseStart) baseStart = dirScalar / 650000;
+            if (dirScalar / 130000 > baseEnd) baseEnd = dirScalar / 130000;
+            print("Base Start set to " + baseStart);
+            print("Base End set to " + baseEnd);
+            oDirection.SetPosition(0, Vector3d.zero + exitTraj.xzy.normalized * baseStart);
+            oDirection.SetPosition(1, exitTraj.xzy.normalized * baseEnd);
             oDirection.enabled = true;
             // */
         }
@@ -176,6 +190,13 @@ namespace ESLDCore
         // Update said predictions
         private void updateExitOrbit(Vessel near, Vessel far, string model)
         {
+            float baseWidth = 20.0f;
+            double baseStart = 10;
+            double baseEnd = 50;
+            Vector3 mapCamPos = ScaledSpace.ScaledToLocalSpace(MapView.MapCamera.transform.position);
+            MapObject farTarget = MapView.MapCamera.target;
+            Vector3 farTarPos = ScaledSpace.ScaledToLocalSpace(farTarget.transform.position);
+            float dirScalar = Vector3.Distance(mapCamPos, farTarPos);
             Vector3d exitTraj = getJumpOffset(near, far, model);
             oPredict.driver.referenceBody = far.mainBody;
             oPredict.driver.orbit.referenceBody = far.mainBody;
@@ -184,9 +205,13 @@ namespace ESLDCore
             oPredictDriver.orbit.UpdateFromStateVectors(far.orbit.pos, exitTraj, far.mainBody, Planetarium.GetUniversalTime());
 
             oDirection.transform.position = ScaledSpace.LocalToScaledSpace(far.transform.position);
-            oDirection.SetWidth(20.0f, 0.01f);
-            oDirection.SetPosition(0, Vector3d.zero + exitTraj.xzy.normalized * 10);
-            oDirection.SetPosition(1, exitTraj.xzy.normalized * 50);
+            if (dirScalar / 325000 > baseWidth) baseWidth = dirScalar / 325000f;
+            oDirection.SetWidth(baseWidth, 0.01f);
+            if (dirScalar / 650000 > baseStart) baseStart = dirScalar / 650000;
+            if (dirScalar / 130000 > baseEnd) baseEnd = dirScalar / 130000;
+//          print("Camera distance is " + dirScalar + " results: " + baseWidth + " " + baseStart + " " + baseEnd);
+            oDirection.SetPosition(0, Vector3d.zero + exitTraj.xzy.normalized * baseStart);
+            oDirection.SetPosition(1, exitTraj.xzy.normalized * baseEnd);
             oDirection.transform.eulerAngles = Vector3d.zero;
         }
 
@@ -245,23 +270,23 @@ namespace ESLDCore
         // Calculate how far away from a beacon the ship will arrive.
         private double getTripSpread(double tripdist, string fbmodel)
         {
-            double driftmodifier = 1;
+            double driftmodifier = 1.1;
             switch (fbmodel)
             {
                 case "LB10":
-                    driftmodifier = 10;
+                    driftmodifier = 7;
                     break;
                 case "LB15":
-                    driftmodifier = 50;
+                    driftmodifier = 15;
                     break;
                 case "LB100":
                     driftmodifier = 80;
                     break;
                 case "IB1":
-                    driftmodifier = 2;
+                    driftmodifier = 1.3;
                     break;
                 default:
-                    driftmodifier = 1;
+                    driftmodifier = 1.1;
                     break;
             }
             return Math.Round(Math.Log(tripdist) / Math.Log(driftmodifier) * 10) * 100;
@@ -359,25 +384,29 @@ namespace ESLDCore
             }
         }
 
-        public override void OnFixedUpdate()
+        public override void OnUpdate()
         {
-            var startState = hasNearBeacon;
-            nearBeacon = ScanForNearBeacons();
-            if (nearBeacon == null)
+            if (isActive)
             {
-                if (startState != hasNearBeacon)
+                var startState = hasNearBeacon;
+                nearBeacon = ScanForNearBeacons();
+                if (nearBeacon == null)
                 {
-                    HailerGUIClose();
+                    if (startState != hasNearBeacon)
+                    {
+                        HailerGUIClose();
+                    }
+                    Events["HailerGUIClose"].active = false;
+                    Events["HailerGUIOpen"].active = false;
                 }
-                Events["HailerGUIClose"].active = false;
-                Events["HailerGUIOpen"].active = false;
+                else
+                {
+                    Events["HailerGUIClose"].active = false;
+                    Events["HailerGUIOpen"].active = true;
+                    if (guiopen) listFarBeacons();
+                }
             }
-            else
-            {
-                Events["HailerGUIClose"].active = false;
-                Events["HailerGUIOpen"].active = true;
-                if (guiopen) listFarBeacons();
-            }
+            
         }
 
         // Screen 1 of beacon interface, displays beacons and where they go along with some fuel calculations. 
@@ -590,6 +619,10 @@ namespace ESLDCore
                 GUILayout.Label("Destination: " + farBeacon.mainBody.name + " at " + Math.Round(farBeacon.altitude / 1000) + "km.");
                 precision = getTripSpread(tripdist, farBeaconModel);
                 GUILayout.Label("Transfer will emerge within " + precision + "m of destination beacon.");
+                if (farBeacon.altitude - precision <= farBeacon.mainBody.Radius * 0.1f || farBeacon.altitude - precision <= farBeacon.mainBody.atmosphereDepth)
+                {
+                    GUILayout.Label("Arrival area is very close to " + farBeacon.mainBody.name + ".", labelNoFuel);
+                }
                 if (!nearBeacon.hasAMU)
                 {
                     Vector3d transferVelOffset = getJumpOffset(vessel, farBeacon, nearBeacon.beaconModel) - farBeacon.orbit.vel;
@@ -756,7 +789,8 @@ namespace ESLDCore
         [KSPEvent(name = "HailerActivate", active = true, guiActive = true, guiName = "Initialize Hailer")]
         public void HailerActivate()
         {
-            part.force_activate();
+//          part.force_activate();
+            isActive = true;
             Events["HailerActivate"].active = false;
             Events["HailerDeactivate"].active = true;
             ScanForNearBeacons();
@@ -781,7 +815,8 @@ namespace ESLDCore
         [KSPEvent(name = "HailerDeactivate", active = false, guiActive = true, guiName = "Shut Down Hailer")]
         public void HailerDeactivate()
         {
-            part.deactivate();
+//          part.deactivate();
+            isActive = false;
             if (oPredict != null) hideExitOrbit(oPredict);
             HailerGUIClose();
             RenderingManager.RemoveFromPostDrawQueue(4, new Callback(drawConfirm));
